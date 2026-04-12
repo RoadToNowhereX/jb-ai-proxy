@@ -55,6 +55,7 @@ node server.js
 {
   "port": 3000,
   "api_keys": ["sk-your-key-here"],
+  "panel_password": "your-password",
   "grazie_agent": {
     "name": "aia:idea",
     "version": "261.22158.366:261.22158.277"
@@ -64,6 +65,7 @@ node server.js
 
 - `port`: 监听端口
 - `api_keys`: API 密钥数组，空数组表示不鉴权
+- `panel_password`: 管理面板密码，留空表示不需要密码
 - `grazie_agent`: 发送给 JetBrains API 的客户端标识
 
 ## API 使用
