@@ -112,6 +112,20 @@ function responsesStream(jwt, body) {
   return llmStream(jwt, body, '/user/v5/llm/responses/stream/v8');
 }
 
+function nativeAnthropicMessages(jwt, body) {
+  const config = loadConfig();
+  return fetch(`${JB_API_BASE}/user/v5/llm/anthropic/v1/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'grazie-authenticate-jwt': jwt,
+      'grazie-agent': JSON.stringify(config.grazie_agent),
+      'User-Agent': 'ktor-client',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 function decodeJwtPayload(token) {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Invalid JWT');
@@ -121,6 +135,7 @@ function decodeJwtPayload(token) {
 
 module.exports = {
   refreshIdToken, registerGrazie, provideAccess, getUserInfo,
-  getProfiles, getQuota, chatStream, responsesStream, decodeJwtPayload,
+  getProfiles, getQuota, chatStream, responsesStream, nativeAnthropicMessages,
+  decodeJwtPayload,
   JB_API_BASE, JB_OAUTH_BASE,
 };
