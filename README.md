@@ -4,7 +4,7 @@ JetBrains AI 反向代理，将 JetBrains AI API 转换为 OpenAI、Anthropic、
 
 底层路由到 JB 两类端点（公共前缀 `/user/v5/llm/`）：
 
-- **聚合层** `chat/stream/v8`、`responses/stream/v8`：JB 自定义 profile 格式，所有 model 可用但丢 thinking / reasoning 等原生特性。Gemini 只能走这里。
+- **聚合层** `chat/stream/v8`、`responses/stream/v8`：JB 自定义 profile 格式，所有 model 可用但丢 thinking / reasoning 等原生特性。（Gemini模型只有聚合层）
 - **原生透传**  `anthropic/v1/messages`、`openai/v1/chat/completions`、`openai/v1/responses`、`xai/v1/responses`：JB 不公开但实测可用的路径，按各家官方 API 协议零转换。Claude / OpenAI / Grok 同协议请求自动走原生。
 
 ## 功能
@@ -119,7 +119,7 @@ curl -X POST http://localhost:3000/v1/responses \
   }'
 ```
 
-支持 OpenAI（含 Codex 全系列）和 xAI Grok。注意 token 上限字段是 `max_output_tokens`（不是 `max_tokens`）。
+支持 OpenAI（含 Codex 全系列）和 xAI Grok。
 
 ### 模型列表
 
