@@ -21,41 +21,85 @@ async function withLoading(btn, text, fn) {
   }
 }
 
+const PAGE_SIZE = 15;
+let allAccounts = [];
+let currentPage = 1;
+
 async function loadAccounts() {
   const container = document.getElementById('accounts-list');
   container.innerHTML = '<p class="muted">加载中...</p>';
   try {
     const res = await fetch('/api/accounts');
-    const accounts = await res.json();
-
-    if (accounts.length === 0) {
-      container.innerHTML = '<p class="muted">暂无账号</p>';
-      return;
-    }
-
-    container.innerHTML = accounts.map(acc => `
-      <div class="account-row">
-        <div class="account-info">
-          <div class="account-email">${esc(acc.email)}</div>
-          <div class="account-meta">
-            <span class="status status-${acc.status}">${statusText(acc.status)}</span>
-            <span>${esc(acc.license_id || '')}</span>
-          </div>
-          <div id="quota-${acc.id}"></div>
-        </div>
-        <div class="account-actions">
-          <button class="btn-sm" onclick="withLoading(this,'查询中...',()=>loadQuota('${acc.id}'))">配额</button>
-          <button class="btn-sm" onclick="withLoading(this,'刷新中...',()=>refreshAccount('${acc.id}'))">刷新</button>
-          <button class="btn-danger" onclick="deleteAccount(this,'${acc.id}')">删除</button>
-        </div>
-      </div>`).join('');
+    allAccounts = await res.json();
+    currentPage = 1;
+    renderAccounts();
   } catch (err) {
     container.innerHTML = `<p class="muted">加载失败: ${esc(err.message)}</p>`;
+    document.getElementById('accounts-summary').textContent = '';
+    document.getElementById('accounts-pagination').innerHTML = '';
   }
 }
 
+function renderAccounts() {
+  const summaryEl = document.getElementById('accounts-summary');
+  const container = document.getElementById('accounts-list');
+  const pagEl = document.getElementById('accounts-pagination');
+
+  const counts = { active: 0, suspended: 0, quota_exhausted: 0, error: 0 };
+  for (const a of allAccounts) counts[a.status] = (counts[a.status] || 0) + 1;
+  const parts = [`共 ${allAccounts.length}`];
+  if (counts.active) parts.push(`正常 ${counts.active}`);
+  if (counts.suspended) parts.push(`已封禁 ${counts.suspended}`);
+  if (counts.quota_exhausted) parts.push(`配额耗尽 ${counts.quota_exhausted}`);
+  if (counts.error) parts.push(`异常 ${counts.error}`);
+  summaryEl.textContent = parts.join('  ·  ');
+
+  if (allAccounts.length === 0) {
+    container.innerHTML = '<p class="muted">暂无账号</p>';
+    pagEl.innerHTML = '';
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(allAccounts.length / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const slice = allAccounts.slice(start, start + PAGE_SIZE);
+
+  container.innerHTML = slice.map(acc => `
+    <div class="account-row">
+      <div class="account-info">
+        <div class="account-email">${esc(acc.email)}</div>
+        <div class="account-meta">
+          <span class="status status-${acc.status}">${statusText(acc.status)}</span>
+          <span>${esc(acc.license_id || '')}</span>
+        </div>
+        <div id="quota-${acc.id}"></div>
+      </div>
+      <div class="account-actions">
+        <button class="btn-sm" onclick="withLoading(this,'查询中...',()=>loadQuota('${acc.id}'))">配额</button>
+        <button class="btn-sm" onclick="withLoading(this,'刷新中...',()=>refreshAccount('${acc.id}'))">刷新</button>
+        <button class="btn-danger" onclick="deleteAccount(this,'${acc.id}')">删除</button>
+      </div>
+    </div>`).join('');
+
+  if (totalPages <= 1) {
+    pagEl.innerHTML = '';
+  } else {
+    pagEl.innerHTML = `
+      <button class="btn-sm" onclick="goToPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>上一页</button>
+      <span class="muted">${currentPage} / ${totalPages}</span>
+      <button class="btn-sm" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>下一页</button>
+    `;
+  }
+}
+
+function goToPage(p) {
+  currentPage = p;
+  renderAccounts();
+}
+
 function statusText(s) {
-  const map = { active: '正常', error: '异常', quota_exhausted: '配额耗尽', suspended: '已冻结' };
+  const map = { active: '正常', error: '异常', quota_exhausted: '配额耗尽', suspended: '已封禁' };
   return map[s] || s;
 }
 

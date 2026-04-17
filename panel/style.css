@@ -250,6 +250,25 @@ code {
   color: #374151;
 }
 
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.pagination button[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#accounts-summary {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+}
+
 .quota-bar {
   width: 120px;
   height: 5px;
