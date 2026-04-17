@@ -4,6 +4,7 @@ const { loadConfig } = require('./src/config');
 const accountManager = require('./src/account-manager');
 const openaiRoutes = require('./src/routes/openai');
 const anthropicRoutes = require('./src/routes/anthropic');
+const responsesRoutes = require('./src/routes/responses');
 const authRoutes = require('./src/routes/auth');
 const panelApiRoutes = require('./src/routes/panel-api');
 
@@ -122,6 +123,7 @@ app.post('/api/panel/logout', (req, res) => {
 // API routes (with API key auth)
 app.use(apiKeyAuth, openaiRoutes);
 app.use(apiKeyAuth, anthropicRoutes);
+app.use(apiKeyAuth, responsesRoutes);
 
 // Auth + panel API routes (with panel password auth)
 app.use(panelAuth, authRoutes);
@@ -135,5 +137,6 @@ app.listen(config.port, () => {
   console.log(`Management panel: http://localhost:${config.port}/panel`);
   console.log(`OpenAI endpoint:  http://localhost:${config.port}/v1/chat/completions`);
   console.log(`Anthropic endpoint: http://localhost:${config.port}/v1/messages`);
+  console.log(`Responses endpoint: http://localhost:${config.port}/v1/responses`);
   console.log(`API key auth: ${config.api_key ? 'enabled' : 'disabled'}`);
 });

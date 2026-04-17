@@ -134,6 +134,14 @@ function nativeOpenaiChatCompletions(jwt, body) {
   return nativeProxy(jwt, body, '/user/v5/llm/openai/v1/chat/completions');
 }
 
+function nativeOpenaiResponses(jwt, body) {
+  return nativeProxy(jwt, body, '/user/v5/llm/openai/v1/responses');
+}
+
+function nativeXaiResponses(jwt, body) {
+  return nativeProxy(jwt, body, '/user/v5/llm/xai/v1/responses');
+}
+
 function decodeJwtPayload(token) {
   const parts = token.split('.');
   if (parts.length !== 3) throw new Error('Invalid JWT');
@@ -145,6 +153,7 @@ module.exports = {
   refreshIdToken, registerGrazie, provideAccess, getUserInfo,
   getProfiles, getQuota, chatStream, responsesStream,
   nativeAnthropicMessages, nativeOpenaiChatCompletions,
+  nativeOpenaiResponses, nativeXaiResponses,
   decodeJwtPayload,
   JB_API_BASE, JB_OAUTH_BASE,
 };

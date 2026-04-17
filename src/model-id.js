@@ -24,9 +24,9 @@ const ANTHROPIC_PROFILE_TO_NATIVE = {
   'anthropic-claude-4-7-opus':   'claude-opus-4-7',
 };
 
-// JB profile ID → native OpenAI model ID. Codex variants deliberately
-// omitted — /openai/v1/chat/completions rejects them; they fall through
-// to the aggregated responses/stream/v8 path instead.
+// JB profile ID → native OpenAI model ID (chat.completions-compatible).
+// Codex variants are in OPENAI_CODEX_PROFILE_TO_NATIVE below — they only
+// work on the Responses endpoint, not chat/completions.
 const OPENAI_PROFILE_TO_NATIVE = {
   'openai-gpt-4':        'gpt-4',
   'openai-gpt-4-turbo':  'gpt-4-turbo',
@@ -49,10 +49,40 @@ const OPENAI_PROFILE_TO_NATIVE = {
   'openai-gpt-5-4-nano': 'gpt-5.4-nano',
 };
 
-function resolve(modelId) {
+// Codex variants — only reachable via /openai/v1/responses, rejected by
+// chat/completions.
+const OPENAI_CODEX_PROFILE_TO_NATIVE = {
+  'openai-gpt-5-codex':        'gpt-5-codex',
+  'openai-gpt-5-1-codex':      'gpt-5.1-codex',
+  'openai-gpt-5-1-codex-mini': 'gpt-5.1-codex-mini',
+  'openai-gpt-5-1-codex-max':  'gpt-5.1-codex-max',
+  'openai-gpt-5-2-codex':      'gpt-5.2-codex',
+  'openai-gpt-5-3-codex':      'gpt-5.3-codex',
+};
+
+// xAI profile ID → native Grok model ID. All five variants have Responses
+// support in practice even though the Profile.features field omits it.
+const XAI_PROFILE_TO_NATIVE = {
+  'xai-grok-4':                      'grok-4-0709',
+  'xai-grok-4-fast':                 'grok-4-fast-reasoning',
+  'xai-grok-4-1-fast':               'grok-4-1-fast-reasoning',
+  'xai-grok-4-1-fast-non-reasoning': 'grok-4-1-fast-non-reasoning',
+  'xai-grok-code-fast-1':            'grok-code-fast-1-0825',
+};
+
+/**
+ * Resolve a client-facing model ID for routing.
+ *
+ * @param {string} modelId
+ * @param {'chat'|'responses'} endpoint - which JB native endpoint the
+ *   caller is about to hit. codex variants resolve to openai only when
+ *   endpoint === 'responses'; xAI resolves only on responses.
+ */
+function resolve(modelId, endpoint = 'chat') {
   if (!modelId || typeof modelId !== 'string') return null;
 
-  // Anthropic
+  // Anthropic — only meaningful on the Anthropic messages endpoint (the
+  // caller in /v1/messages), never on OpenAI/xAI endpoints.
   if (ANTHROPIC_PROFILE_TO_NATIVE[modelId]) {
     return { family: 'anthropic', nativeId: ANTHROPIC_PROFILE_TO_NATIVE[modelId] };
   }
@@ -60,10 +90,30 @@ function resolve(modelId) {
     return { family: 'anthropic', nativeId: modelId };
   }
 
-  // OpenAI — codex variants are unsupported on chat/completions and must
-  // keep using the aggregated path.
-  if (modelId.includes('codex')) return null;
+  // xAI — Responses endpoint only.
+  if (endpoint === 'responses') {
+    if (XAI_PROFILE_TO_NATIVE[modelId]) {
+      return { family: 'xai', nativeId: XAI_PROFILE_TO_NATIVE[modelId] };
+    }
+    if (modelId.startsWith('grok-')) {
+      return { family: 'xai', nativeId: modelId };
+    }
+  }
 
+  // OpenAI codex — only usable on Responses endpoint.
+  if (modelId.includes('codex')) {
+    if (endpoint === 'responses') {
+      if (OPENAI_CODEX_PROFILE_TO_NATIVE[modelId]) {
+        return { family: 'openai', nativeId: OPENAI_CODEX_PROFILE_TO_NATIVE[modelId] };
+      }
+      // bare native codex ID
+      return { family: 'openai', nativeId: modelId };
+    }
+    // chat/completions endpoint: fall through to aggregated path
+    return null;
+  }
+
+  // OpenAI (non-codex) — works on both chat/completions and responses.
   if (OPENAI_PROFILE_TO_NATIVE[modelId]) {
     return { family: 'openai', nativeId: OPENAI_PROFILE_TO_NATIVE[modelId] };
   }
