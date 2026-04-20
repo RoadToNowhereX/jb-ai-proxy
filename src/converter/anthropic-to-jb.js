@@ -36,7 +36,9 @@ function convertMessages(system, anthropicMessages) {
     const systemText = typeof system === 'string'
       ? system
       : system.map(s => s.text || '').join('\n');
-    jbMessages.push({ type: 'system_message', content: systemText });
+    if (systemText.trim().length > 0) {
+      jbMessages.push({ type: 'system_message', content: systemText });
+    }
   }
 
   for (const msg of anthropicMessages) {

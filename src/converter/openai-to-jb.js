@@ -34,12 +34,16 @@ function convertMessages(openaiMessages) {
   for (const msg of openaiMessages) {
     switch (msg.role) {
       case 'system':
-      case 'developer':
-        jbMessages.push({
-          type: 'system_message',
-          content: extractTextContent(msg.content),
-        });
+      case 'developer': {
+        const content = extractTextContent(msg.content);
+        if (content.trim().length > 0) {
+          jbMessages.push({
+            type: 'system_message',
+            content: content,
+          });
+        }
         break;
+      }
 
       case 'user':
         if (Array.isArray(msg.content)) {
