@@ -45,7 +45,9 @@ function convertMessages(system, anthropicMessages) {
     switch (msg.role) {
       case 'user':
         if (typeof msg.content === 'string') {
-          jbMessages.push({ type: 'user_message', content: msg.content });
+          if (msg.content.trim().length > 0) {
+            jbMessages.push({ type: 'user_message', content: msg.content });
+          }
         } else if (Array.isArray(msg.content)) {
           const images = msg.content.filter(c => c.type === 'image');
           const texts = msg.content.filter(c => c.type === 'text');
@@ -60,10 +62,13 @@ function convertMessages(system, anthropicMessages) {
           }
 
           if (texts.length > 0) {
-            jbMessages.push({
-              type: 'user_message',
-              content: texts.map(t => t.text).join('\n'),
-            });
+            const userText = texts.map(t => t.text).join('\n');
+            if (userText.trim().length > 0) {
+              jbMessages.push({
+                type: 'user_message',
+                content: userText,
+              });
+            }
           }
 
           for (const tr of toolResults) {
@@ -84,16 +89,21 @@ function convertMessages(system, anthropicMessages) {
 
       case 'assistant':
         if (typeof msg.content === 'string') {
-          jbMessages.push({ type: 'assistant_message_text', content: msg.content });
+          if (msg.content.trim().length > 0) {
+            jbMessages.push({ type: 'assistant_message_text', content: msg.content });
+          }
         } else if (Array.isArray(msg.content)) {
           const textParts = msg.content.filter(c => c.type === 'text');
           const toolUses = msg.content.filter(c => c.type === 'tool_use');
 
           if (textParts.length > 0) {
-            jbMessages.push({
-              type: 'assistant_message_text',
-              content: textParts.map(t => t.text).join('\n'),
-            });
+            const assistantText = textParts.map(t => t.text).join('\n');
+            if (assistantText.trim().length > 0) {
+              jbMessages.push({
+                type: 'assistant_message_text',
+                content: assistantText,
+              });
+            }
           }
 
           for (const tu of toolUses) {
@@ -107,6 +117,14 @@ function convertMessages(system, anthropicMessages) {
         }
         break;
     }
+  }
+
+  // Handle assistant message prefill error: ensure conversation ends with a user message
+  if (jbMessages.length === 0 || jbMessages[jbMessages.length - 1].type !== 'user_message') {
+    jbMessages.push({
+      type: 'user_message',
+      content: 'continue',
+    });
   }
 
   return jbMessages;

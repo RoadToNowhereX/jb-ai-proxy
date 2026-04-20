@@ -55,15 +55,21 @@ function convertMessages(openaiMessages) {
             jbMessages.push({ type: 'media_message', mediaType, data });
           }
 
-          jbMessages.push({
-            type: 'user_message',
-            content: texts.map(t => t.text).join('\n'),
-          });
+          const userText = texts.map(t => t.text).join('\n');
+          if (userText.trim().length > 0) {
+            jbMessages.push({
+              type: 'user_message',
+              content: userText,
+            });
+          }
         } else {
-          jbMessages.push({
-            type: 'user_message',
-            content: msg.content || '',
-          });
+          const userContent = msg.content || '';
+          if (userContent.trim().length > 0) {
+            jbMessages.push({
+              type: 'user_message',
+              content: userContent,
+            });
+          }
         }
         break;
 
@@ -81,10 +87,13 @@ function convertMessages(openaiMessages) {
             });
           }
         } else {
-          jbMessages.push({
-            type: 'assistant_message_text',
-            content: extractTextContent(msg.content),
-          });
+          const assistantContent = extractTextContent(msg.content);
+          if (assistantContent.trim().length > 0) {
+            jbMessages.push({
+              type: 'assistant_message_text',
+              content: assistantContent,
+            });
+          }
         }
         break;
 
@@ -97,6 +106,14 @@ function convertMessages(openaiMessages) {
         });
         break;
     }
+  }
+
+  // Handle assistant message prefill error: ensure conversation ends with a user message
+  if (jbMessages.length === 0 || jbMessages[jbMessages.length - 1].type !== 'user_message') {
+    jbMessages.push({
+      type: 'user_message',
+      content: 'continue',
+    });
   }
 
   return jbMessages;
