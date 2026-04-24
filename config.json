@@ -5,5 +5,15 @@
   "grazie_agent": {
     "name": "aia:idea",
     "version": "261.22158.366:261.22158.277"
+  },
+  "refresh_policy": {
+    "max_retries": 2,
+    "retry_delay_ms": 1500,
+    "auto_retry_on_error": true,
+    "auto_retry_types": [
+      "network",
+      "timeout",
+      "server_error"
+    ]
   }
 }

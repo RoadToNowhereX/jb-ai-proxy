@@ -330,3 +330,41 @@ code {
   gap: 8px;
   margin-top: 4px;
 }
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.checkbox-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.account-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #b91c1c;
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .settings-grid,
+  .checkbox-list {
+    grid-template-columns: 1fr;
+  }
+}

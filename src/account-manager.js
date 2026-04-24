@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const { loadCredentials, saveCredentials } = require('./config');
+const { loadConfig, loadCredentials, saveCredentials } = require('./config');
 const jb = require('./jb-client');
 
 let accounts = [];
@@ -20,6 +20,10 @@ function getAll() {
     license_id: a.license_id,
     added_at: a.added_at,
     last_used_at: a.last_used_at,
+    last_error_type: a.last_error_type || null,
+    last_error_at: a.last_error_at || null,
+    last_error_message: a.last_error_message || null,
+    last_recovery_attempt_at: a.last_recovery_attempt_at || null,
   }));
 }
 
@@ -138,10 +142,10 @@ async function ensureValidJwt(account) {
       if (tokens.refresh_token) account.refresh_token = tokens.refresh_token;
       const payload = jb.decodeJwtPayload(tokens.id_token);
       account.id_token_expires_at = (payload.exp || 0) * 1000;
+      clearAccountError(account);
     } catch (err) {
-      account.status = 'error';
-      persist();
-      throw new Error(`Failed to refresh id_token for ${account.email}: ${err.message}`);
+      markAccountError(account, 'refresh_id_token', err);
+      throw new Error(`Failed to refresh id_token for ${account.email}: ${jb.formatRequestError(err)}`);
     }
   }
 
@@ -161,10 +165,10 @@ async function refreshJwt(account) {
     const jwtPayload = jb.decodeJwtPayload(result.token);
     account.jwt_expires_at = (jwtPayload.exp || 0) * 1000;
     account.status = 'active';
+    clearAccountError(account);
   } catch (err) {
-    account.status = 'error';
-    persist();
-    throw new Error(`Failed to get JWT for ${account.email}: ${err.message}`);
+    markAccountError(account, 'provide_access', err);
+    throw new Error(`Failed to get JWT for ${account.email}: ${jb.formatRequestError(err)}`);
   }
 }
 
@@ -212,14 +216,65 @@ function startRefreshLoop() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(async () => {
     for (const account of accounts) {
-      if (account.status !== 'active') continue;
+      if (account.status === 'active') {
+        try {
+          await ensureValidJwt(account);
+        } catch (err) {
+          console.error(`Auto-refresh failed for ${account.email}: ${err.message}`);
+        }
+        continue;
+      }
+
+      if (account.status !== 'error') continue;
       try {
+        if (!shouldAutoRetryErrorAccount(account)) continue;
+        account.last_recovery_attempt_at = Date.now();
         await ensureValidJwt(account);
+        console.log(`Auto-recovery succeeded for ${account.email}`);
       } catch (err) {
-        console.error(`Auto-refresh failed for ${account.email}: ${err.message}`);
+        console.error(`Auto-recovery failed for ${account.email}: ${err.message}`);
       }
     }
   }, 600000);
+}
+
+function getRefreshPolicy() {
+  return loadConfig().refresh_policy || {};
+}
+
+function classifyAccountError(err) {
+  if (err instanceof jb.JBRequestError) return err.type || 'unknown';
+  return 'unknown';
+}
+
+function markAccountError(account, stage, err) {
+  account.status = 'error';
+  account.last_error_type = classifyAccountError(err);
+  account.last_error_at = Date.now();
+  account.last_error_stage = stage;
+  account.last_error_message = jb.formatRequestError(err);
+  persist();
+}
+
+function clearAccountError(account) {
+  account.last_error_type = null;
+  account.last_error_at = null;
+  account.last_error_stage = null;
+  account.last_error_message = null;
+}
+
+function shouldAutoRetryErrorAccount(account) {
+  const policy = getRefreshPolicy();
+  if (!policy.auto_retry_on_error) return false;
+
+  const allowedTypes = Array.isArray(policy.auto_retry_types) ? policy.auto_retry_types : [];
+  const errorType = account.last_error_type || 'unknown';
+  if (!allowedTypes.includes(errorType)) return false;
+
+  const retryDelayMs = Number.isInteger(policy.retry_delay_ms) ? policy.retry_delay_ms : 1500;
+  const cooldownMs = Math.max(retryDelayMs, 60000);
+  if (account.last_recovery_attempt_at && Date.now() - account.last_recovery_attempt_at < cooldownMs) return false;
+  return true;
 }
 
 function persist() {

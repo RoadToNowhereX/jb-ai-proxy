@@ -1,36 +1,88 @@
 document.addEventListener('DOMContentLoaded', async () => {
-  // Check panel auth
   const res = await fetch('/api/accounts');
   if (res.status === 401) {
     location.href = '/panel/login.html';
     return;
   }
-  loadAccounts();
+  await loadRefreshPolicy();
+  await loadAccounts();
 });
 
-// 通用：给按钮加 loading 状态
+const PAGE_SIZE = 15;
+const AUTO_RETRY_TYPES = ['network', 'timeout', 'server_error', 'rate_limit', 'auth', 'client_error', 'unknown'];
+let allAccounts = [];
+let currentPage = 1;
+
 async function withLoading(btn, text, fn) {
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = text;
   try {
-    await fn();
+    return await fn();
   } finally {
     btn.disabled = false;
     btn.textContent = orig;
   }
 }
 
-const PAGE_SIZE = 15;
-let allAccounts = [];
-let currentPage = 1;
+async function loadRefreshPolicy() {
+  const msg = document.getElementById('policy-save-msg');
+  msg.textContent = '加载策略中...';
+  try {
+    const res = await fetch('/api/settings/refresh-policy');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载策略失败');
+
+    document.getElementById('policy-max-retries').value = data.max_retries ?? 2;
+    document.getElementById('policy-retry-delay').value = data.retry_delay_ms ?? 1500;
+    document.getElementById('policy-auto-retry-on-error').checked = Boolean(data.auto_retry_on_error);
+
+    const selected = new Set(Array.isArray(data.auto_retry_types) ? data.auto_retry_types : []);
+    document.querySelectorAll('#policy-auto-retry-types input[type=checkbox]').forEach(el => {
+      el.checked = selected.has(el.value);
+    });
+
+    msg.textContent = '当前策略已加载';
+  } catch (err) {
+    msg.textContent = `加载策略失败: ${esc(err.message)}`;
+  }
+}
+
+async function saveRefreshPolicy(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  const msg = document.getElementById('policy-save-msg');
+  await withLoading(btn, '保存中...', async () => {
+    const autoRetryTypes = Array.from(document.querySelectorAll('#policy-auto-retry-types input[type=checkbox]:checked'))
+      .map(el => el.value)
+      .filter(type => AUTO_RETRY_TYPES.includes(type));
+
+    const res = await fetch('/api/settings/refresh-policy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        max_retries: Number(document.getElementById('policy-max-retries').value),
+        retry_delay_ms: Number(document.getElementById('policy-retry-delay').value),
+        auto_retry_on_error: document.getElementById('policy-auto-retry-on-error').checked,
+        auto_retry_types: autoRetryTypes,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存策略失败');
+    msg.textContent = '策略已保存';
+  }).catch(err => {
+    msg.textContent = `保存策略失败: ${esc(err.message)}`;
+  });
+}
 
 async function loadAccounts() {
   const container = document.getElementById('accounts-list');
   container.innerHTML = '<p class="muted">加载中...</p>';
   try {
     const res = await fetch('/api/accounts');
-    allAccounts = await res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载账号失败');
+    allAccounts = data;
     currentPage = 1;
     renderAccounts();
   } catch (err) {
@@ -46,13 +98,13 @@ function renderAccounts() {
   const pagEl = document.getElementById('accounts-pagination');
 
   const counts = { active: 0, suspended: 0, quota_exhausted: 0, error: 0 };
-  for (const a of allAccounts) counts[a.status] = (counts[a.status] || 0) + 1;
-  const parts = [`共 ${allAccounts.length}`];
+  for (const account of allAccounts) counts[account.status] = (counts[account.status] || 0) + 1;
+  const parts = [`总数 ${allAccounts.length}`];
   if (counts.active) parts.push(`正常 ${counts.active}`);
-  if (counts.suspended) parts.push(`已封禁 ${counts.suspended}`);
-  if (counts.quota_exhausted) parts.push(`配额耗尽 ${counts.quota_exhausted}`);
   if (counts.error) parts.push(`异常 ${counts.error}`);
-  summaryEl.textContent = parts.join('  ·  ');
+  if (counts.quota_exhausted) parts.push(`额度耗尽 ${counts.quota_exhausted}`);
+  if (counts.suspended) parts.push(`已封禁 ${counts.suspended}`);
+  summaryEl.textContent = parts.join('  |  ');
 
   if (allAccounts.length === 0) {
     container.innerHTML = '<p class="muted">暂无账号</p>';
@@ -72,35 +124,43 @@ function renderAccounts() {
         <div class="account-meta">
           <span class="status status-${acc.status}">${statusText(acc.status)}</span>
           <span>${esc(acc.license_id || '')}</span>
+          ${acc.last_error_type ? `<span>错误类型 ${esc(acc.last_error_type)}</span>` : ''}
         </div>
+        ${acc.last_error_message ? `<div class="account-error">${esc(acc.last_error_message)}</div>` : ''}
         <div id="quota-${acc.id}"></div>
       </div>
       <div class="account-actions">
-        <button class="btn-sm" onclick="withLoading(this,'查询中...',()=>loadQuota('${acc.id}'))">配额</button>
-        <button class="btn-sm" onclick="withLoading(this,'刷新中...',()=>refreshAccount('${acc.id}'))">刷新</button>
-        <button class="btn-danger" onclick="deleteAccount(this,'${acc.id}')">删除</button>
+        <button class="btn-sm" onclick="withLoading(this, '查询中...', () => loadQuota('${acc.id}'))">额度</button>
+        <button class="btn-sm" onclick="withLoading(this, '刷新中...', () => refreshAccount('${acc.id}'))">刷新</button>
+        <button class="btn-danger" onclick="deleteAccount(this, '${acc.id}')">删除</button>
       </div>
     </div>`).join('');
 
   if (totalPages <= 1) {
     pagEl.innerHTML = '';
-  } else {
-    pagEl.innerHTML = `
-      <button class="btn-sm" onclick="goToPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>上一页</button>
-      <span class="muted">${currentPage} / ${totalPages}</span>
-      <button class="btn-sm" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>下一页</button>
-    `;
+    return;
   }
+
+  pagEl.innerHTML = `
+    <button class="btn-sm" onclick="goToPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>上一页</button>
+    <span class="muted">${currentPage} / ${totalPages}</span>
+    <button class="btn-sm" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>下一页</button>
+  `;
 }
 
-function goToPage(p) {
-  currentPage = p;
+function goToPage(page) {
+  currentPage = page;
   renderAccounts();
 }
 
-function statusText(s) {
-  const map = { active: '正常', error: '异常', quota_exhausted: '配额耗尽', suspended: '已封禁' };
-  return map[s] || s;
+function statusText(status) {
+  const map = {
+    active: '正常',
+    error: '异常',
+    quota_exhausted: '额度耗尽',
+    suspended: '已封禁',
+  };
+  return map[status] || status;
 }
 
 async function loadQuota(id) {
@@ -108,36 +168,36 @@ async function loadQuota(id) {
   el.innerHTML = '<span class="muted">查询中...</span>';
   try {
     const res = await fetch(`/api/accounts/${id}/quota`);
-    const d = await res.json();
-    const used = parseFloat(d.current?.tariffQuota?.current?.amount || d.current?.current?.amount || 0);
-    const max = parseFloat(d.current?.tariffQuota?.maximum?.amount || d.current?.maximum?.amount || 1000000);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '查询额度失败');
+    const used = parseFloat(data.current?.tariffQuota?.current?.amount || data.current?.current?.amount || 0);
+    const max = parseFloat(data.current?.tariffQuota?.maximum?.amount || data.current?.maximum?.amount || 1000000);
     const pct = Math.max(0, Math.min(100, ((max - used) / max) * 100));
     el.innerHTML = `
       <div class="account-meta">已用 ${used.toFixed(0)} / ${max.toFixed(0)}</div>
-      <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>`;
+      <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
+    `;
   } catch (err) {
-    el.innerHTML = `<span class="muted">${err.message}</span>`;
+    el.innerHTML = `<span class="muted">${esc(err.message)}</span>`;
   }
 }
 
 async function refreshAccount(id) {
-  try {
-    await fetch(`/api/accounts/${id}/refresh`, { method: 'POST' });
-    await loadAccounts();
-  } catch (err) {
-    alert('刷新失败: ' + err.message);
-  }
+  const res = await fetch(`/api/accounts/${id}/refresh`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '刷新失败');
+  await loadAccounts();
 }
 
 async function deleteAccount(btn, id) {
-  if (!confirm('确定删除该账号？')) return;
+  if (!confirm('确定删除这个账号吗？')) return;
   await withLoading(btn, '删除中...', async () => {
-    try {
-      await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
-      await loadAccounts();
-    } catch (err) {
-      alert('删除失败: ' + err.message);
-    }
+    const res = await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '删除失败');
+    await loadAccounts();
+  }).catch(err => {
+    alert(`删除失败: ${err.message}`);
   });
 }
 
@@ -145,11 +205,12 @@ async function startOAuth() {
   try {
     const res = await fetch('/auth/start');
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '启动 OAuth 失败');
     document.getElementById('oauth-url').href = data.url;
     document.getElementById('oauth-form').classList.remove('hidden');
     document.getElementById('manual-form').classList.add('hidden');
   } catch (err) {
-    alert('启动登录失败: ' + err.message);
+    alert(`启动 OAuth 失败: ${err.message}`);
   }
 }
 
@@ -165,10 +226,12 @@ async function submitOAuthCallback(e) {
       body: JSON.stringify({ callback_url: callbackUrl, license_id: licenseId }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (!res.ok) throw new Error(data.error || '添加失败');
     hideOAuthForm();
     await loadAccounts();
-  }).catch(err => alert('添加失败: ' + err.message));
+  }).catch(err => {
+    alert(`添加失败: ${err.message}`);
+  });
 }
 
 function hideOAuthForm() {
@@ -190,24 +253,26 @@ async function addManual(e) {
   e.preventDefault();
   const btn = e.target.querySelector('button[type=submit]');
   await withLoading(btn, '添加中...', async () => {
-    const rt = document.getElementById('manual-rt').value.trim();
-    const lid = document.getElementById('manual-lid').value.trim();
+    const refreshToken = document.getElementById('manual-rt').value.trim();
+    const licenseId = document.getElementById('manual-lid').value.trim();
     const res = await fetch('/api/accounts/manual', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: rt, license_id: lid }),
+      body: JSON.stringify({ refresh_token: refreshToken, license_id: licenseId }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    if (!res.ok) throw new Error(data.error || '添加失败');
     hideManualForm();
     document.getElementById('manual-rt').value = '';
     document.getElementById('manual-lid').value = '';
     await loadAccounts();
-  }).catch(err => alert('添加失败: ' + err.message));
+  }).catch(err => {
+    alert(`添加失败: ${err.message}`);
+  });
 }
 
-function esc(s) {
+function esc(value) {
   const d = document.createElement('div');
-  d.textContent = s || '';
+  d.textContent = value || '';
   return d.innerHTML;
 }

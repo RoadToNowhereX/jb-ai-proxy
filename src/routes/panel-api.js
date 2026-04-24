@@ -1,10 +1,48 @@
 const express = require('express');
 const accountManager = require('../account-manager');
+const { loadConfig, saveConfig } = require('../config');
 
 const router = express.Router();
+const AUTO_RETRY_TYPES = ['network', 'timeout', 'server_error', 'rate_limit', 'auth', 'client_error', 'unknown'];
 
 router.get('/api/accounts', (req, res) => {
   res.json(accountManager.getAll());
+});
+
+router.get('/api/settings/refresh-policy', (req, res) => {
+  res.json(loadConfig().refresh_policy || {});
+});
+
+router.post('/api/settings/refresh-policy', (req, res) => {
+  const config = loadConfig();
+  const current = config.refresh_policy || {};
+  const { max_retries, retry_delay_ms, auto_retry_on_error, auto_retry_types } = req.body;
+
+  if (!Number.isInteger(max_retries) || max_retries < 0 || max_retries > 10) {
+    return res.status(400).json({ error: 'max_retries must be an integer between 0 and 10' });
+  }
+  if (!Number.isInteger(retry_delay_ms) || retry_delay_ms < 100 || retry_delay_ms > 600000) {
+    return res.status(400).json({ error: 'retry_delay_ms must be an integer between 100 and 600000' });
+  }
+  if (typeof auto_retry_on_error !== 'boolean') {
+    return res.status(400).json({ error: 'auto_retry_on_error must be boolean' });
+  }
+  if (!Array.isArray(auto_retry_types) || auto_retry_types.some(type => !AUTO_RETRY_TYPES.includes(type))) {
+    return res.status(400).json({ error: `auto_retry_types must be an array of: ${AUTO_RETRY_TYPES.join(', ')}` });
+  }
+
+  const next = saveConfig({
+    ...config,
+    refresh_policy: {
+      ...current,
+      max_retries,
+      retry_delay_ms,
+      auto_retry_on_error,
+      auto_retry_types,
+    },
+  });
+
+  res.json(next.refresh_policy);
 });
 
 router.post('/api/accounts/manual', async (req, res) => {
