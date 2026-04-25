@@ -11,7 +11,7 @@ body {
 }
 
 .container {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 40px 20px;
 }
@@ -37,9 +37,6 @@ h2 {
   font-weight: 600;
   color: #334155;
   margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 h3 {
@@ -63,9 +60,18 @@ h3 {
   margin-bottom: 20px;
 }
 
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 9px 18px;
   border-radius: 8px;
@@ -74,7 +80,7 @@ h3 {
   cursor: pointer;
   text-decoration: none;
   border: none;
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
 
 .btn-primary {
@@ -84,7 +90,7 @@ h3 {
 
 .btn-primary:hover {
   background: #1d4ed8;
-  box-shadow: 0 1px 3px rgba(37,99,235,0.3);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
 }
 
 .btn-secondary {
@@ -97,34 +103,61 @@ h3 {
   background: #f1f5f9;
 }
 
-.btn-sm {
+.btn-sm,
+.btn-warning,
+.btn-danger,
+.btn-success {
   font-size: 12px;
   padding: 5px 12px;
   border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-sm {
   background: #f1f5f9;
   color: #475569;
   border: 1px solid #e2e8f0;
-  cursor: pointer;
-  transition: background 0.15s;
 }
 
 .btn-sm:hover {
   background: #e2e8f0;
 }
 
+.btn-warning {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fdba74;
+}
+
+.btn-warning:hover {
+  background: #ffedd5;
+}
+
+.btn-success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.btn-success:hover {
+  background: #d1fae5;
+}
+
 .btn-danger {
-  font-size: 12px;
-  padding: 5px 12px;
-  border-radius: 6px;
   background: #fff;
   color: #dc2626;
   border: 1px solid #fecaca;
-  cursor: pointer;
-  transition: background 0.15s;
 }
 
 .btn-danger:hover {
   background: #fef2f2;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .form-group {
@@ -158,7 +191,7 @@ h3 {
 .form-group input:focus {
   outline: none;
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .form-group input::placeholder {
@@ -174,23 +207,56 @@ code {
   color: #475569;
 }
 
-.hidden { display: none; }
+.hidden {
+  display: none;
+}
 
 .muted {
   color: #94a3b8;
   font-size: 13px;
 }
 
+.accounts-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.bulk-select {
+  margin-right: auto;
+}
+
 .account-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid #f1f5f9;
 }
 
 .account-row:last-child {
   border-bottom: none;
+}
+
+.account-row-disabled {
+  opacity: 0.9;
+}
+
+.account-select-cell {
+  padding-top: 2px;
+}
+
+.account-select {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  cursor: pointer;
 }
 
 .account-info {
@@ -202,6 +268,7 @@ code {
   font-weight: 500;
   font-size: 14px;
   color: #0f172a;
+  word-break: break-word;
 }
 
 .account-meta {
@@ -218,6 +285,8 @@ code {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   flex-shrink: 0;
   margin-left: 12px;
 }
@@ -250,6 +319,11 @@ code {
   color: #374151;
 }
 
+.status-disabled {
+  background: #e0f2fe;
+  color: #075985;
+}
+
 .pagination {
   display: flex;
   justify-content: center;
@@ -257,11 +331,6 @@ code {
   gap: 12px;
   margin-top: 16px;
   font-size: 13px;
-}
-
-.pagination button[disabled] {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 #accounts-summary {
@@ -363,8 +432,34 @@ code {
 }
 
 @media (max-width: 640px) {
+  .container {
+    padding: 24px 16px;
+  }
+
+  .actions,
+  .form-actions,
+  .section-header,
+  .accounts-bulk-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bulk-select {
+    margin-right: 0;
+  }
+
   .settings-grid,
   .checkbox-list {
     grid-template-columns: 1fr;
+  }
+
+  .account-row {
+    flex-wrap: wrap;
+  }
+
+  .account-actions {
+    width: 100%;
+    margin-left: 28px;
+    justify-content: flex-start;
   }
 }

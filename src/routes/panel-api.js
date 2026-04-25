@@ -58,6 +58,44 @@ router.post('/api/accounts/manual', async (req, res) => {
   }
 });
 
+router.post('/api/accounts/bulk-disable', (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0 || ids.some(id => typeof id !== 'string' || !id.trim())) {
+    return res.status(400).json({ error: 'ids must be a non-empty array of account ids' });
+  }
+
+  try {
+    const result = accountManager.bulkDisable(ids);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/accounts/:id/disable', (req, res) => {
+  try {
+    const account = accountManager.disable(req.params.id);
+    res.json({ id: account.id, email: account.email, status: account.status });
+  } catch (err) {
+    if (err.message === 'Account not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/accounts/:id/enable', async (req, res) => {
+  try {
+    const account = await accountManager.enable(req.params.id);
+    res.json({ id: account.id, email: account.email, status: account.status });
+  } catch (err) {
+    if (err.message === 'Account not found') {
+      return res.status(404).json({ error: err.message });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.delete('/api/accounts/:id', (req, res) => {
   const ok = accountManager.remove(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Account not found' });

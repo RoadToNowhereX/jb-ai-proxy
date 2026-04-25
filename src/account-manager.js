@@ -7,23 +7,26 @@ let roundRobinIndex = 0;
 let refreshTimer = null;
 
 function init() {
-  accounts = loadCredentials();
+  accounts = loadCredentials().map(account => ({
+    ...account,
+    status: account.status || 'active',
+  }));
   startRefreshLoop();
   console.log(`Account manager: loaded ${accounts.length} account(s)`);
 }
 
 function getAll() {
-  return accounts.map(a => ({
-    id: a.id,
-    email: a.email,
-    status: a.status,
-    license_id: a.license_id,
-    added_at: a.added_at,
-    last_used_at: a.last_used_at,
-    last_error_type: a.last_error_type || null,
-    last_error_at: a.last_error_at || null,
-    last_error_message: a.last_error_message || null,
-    last_recovery_attempt_at: a.last_recovery_attempt_at || null,
+  return accounts.map(account => ({
+    id: account.id,
+    email: account.email,
+    status: account.status,
+    license_id: account.license_id,
+    added_at: account.added_at,
+    last_used_at: account.last_used_at,
+    last_error_type: account.last_error_type || null,
+    last_error_at: account.last_error_at || null,
+    last_error_message: account.last_error_message || null,
+    last_recovery_attempt_at: account.last_recovery_attempt_at || null,
   }));
 }
 
@@ -34,7 +37,7 @@ async function addFromOAuth(tokens, licenseId) {
   const payload = jb.decodeJwtPayload(id_token);
   const email = payload.email || payload.preferred_username || 'unknown';
 
-  const existing = accounts.find(a => a.email === email);
+  const existing = accounts.find(account => account.email === email);
   if (existing) {
     existing.refresh_token = refresh_token;
     existing.id_token = id_token;
@@ -78,7 +81,7 @@ async function addManual(refreshToken, licenseId) {
   const payload = jb.decodeJwtPayload(tokens.id_token);
   const email = payload.email || payload.preferred_username || 'unknown';
 
-  const existing = accounts.find(a => a.email === email);
+  const existing = accounts.find(account => account.email === email);
   if (existing) {
     existing.refresh_token = tokens.refresh_token || refreshToken;
     existing.license_id = licenseId;
@@ -116,23 +119,48 @@ async function addManual(refreshToken, licenseId) {
 }
 
 function remove(id) {
-  const idx = accounts.findIndex(a => a.id === id);
+  const idx = accounts.findIndex(account => account.id === id);
   if (idx === -1) return false;
   accounts.splice(idx, 1);
   persist();
   return true;
 }
 
+function disable(id) {
+  const account = getAccountById(id);
+  if (account.status === 'disabled') return account;
+  account.status = 'disabled';
+  persist();
+  return account;
+}
+
+function bulkDisable(ids) {
+  const uniqueIds = [...new Set(ids)];
+  let updated = 0;
+
+  for (const id of uniqueIds) {
+    const account = accounts.find(item => item.id === id);
+    if (!account || account.status === 'disabled') continue;
+    account.status = 'disabled';
+    updated++;
+  }
+
+  if (updated > 0) persist();
+  return { ok: true, updated };
+}
+
 function getNext() {
-  const active = accounts.filter(a => a.status === 'active');
+  const active = accounts.filter(account => account.status === 'active');
   if (active.length === 0) return null;
+
   const account = active[roundRobinIndex % active.length];
   roundRobinIndex++;
   account.last_used_at = Date.now();
   return account;
 }
 
-async function ensureValidJwt(account) {
+async function ensureValidJwt(account, opts = {}) {
+  const preserveDisabled = opts.preserveDisabled ?? account.status === 'disabled';
   const now = Date.now();
 
   if (!account.id_token || now > account.id_token_expires_at - 300000) {
@@ -144,38 +172,42 @@ async function ensureValidJwt(account) {
       account.id_token_expires_at = (payload.exp || 0) * 1000;
       clearAccountError(account);
     } catch (err) {
-      markAccountError(account, 'refresh_id_token', err);
+      markAccountError(account, 'refresh_id_token', err, { preserveDisabled });
       throw new Error(`Failed to refresh id_token for ${account.email}: ${jb.formatRequestError(err)}`);
     }
   }
 
   if (!account.jwt || now > account.jwt_expires_at - 1800000) {
-    await refreshJwt(account);
+    await refreshJwt(account, { preserveDisabled });
   }
 
   persist();
   return account.jwt;
 }
 
-async function refreshJwt(account) {
+async function refreshJwt(account, opts = {}) {
+  const preserveDisabled = Boolean(opts.preserveDisabled && account.status === 'disabled');
+
   try {
     const result = await jb.provideAccess(account.id_token, account.license_id);
     if (!result.token) throw new Error('No token in provide-access response');
+
     account.jwt = result.token;
     const jwtPayload = jb.decodeJwtPayload(result.token);
     account.jwt_expires_at = (jwtPayload.exp || 0) * 1000;
-    account.status = 'active';
-    clearAccountError(account);
+    account.status = preserveDisabled ? 'disabled' : 'active';
+
+    if (!preserveDisabled) clearAccountError(account);
   } catch (err) {
-    markAccountError(account, 'provide_access', err);
+    markAccountError(account, 'provide_access', err, { preserveDisabled });
     throw new Error(`Failed to get JWT for ${account.email}: ${jb.formatRequestError(err)}`);
   }
 }
 
 async function updateLicenseId(id, licenseId) {
-  const account = accounts.find(a => a.id === id);
-  if (!account) throw new Error('Account not found');
+  const account = getAccountById(id);
   account.license_id = licenseId;
+
   const now = Date.now();
   if (!account.id_token || now > account.id_token_expires_at - 300000) {
     const tokens = await jb.refreshIdToken(account.refresh_token);
@@ -184,36 +216,48 @@ async function updateLicenseId(id, licenseId) {
     const payload = jb.decodeJwtPayload(tokens.id_token);
     account.id_token_expires_at = (payload.exp || 0) * 1000;
   }
-  await refreshJwt(account);
+
+  await refreshJwt(account, { preserveDisabled: account.status === 'disabled' });
   persist();
   return account;
 }
 
 async function forceRefresh(id) {
-  const account = accounts.find(a => a.id === id);
-  if (!account) throw new Error('Account not found');
-  // 只在 status=error 时才强制轮换 RT 恢复；正常账号仍走原逻辑（token 未过期则跳过）
+  const account = getAccountById(id);
+
   if (account.status === 'error') {
     account.id_token_expires_at = 0;
     account.jwt_expires_at = 0;
   }
-  await ensureValidJwt(account);
-  // ensureValidJwt 里 refreshJwt 成功才会设 status=active；
-  // 如果没触发 refreshJwt（token 还有效），说明账号本来就没问题，也标记 active
-  if (account.status !== 'error') account.status = 'active';
+
+  await ensureValidJwt(account, { preserveDisabled: account.status === 'disabled' });
+
+  if (account.status !== 'error' && account.status !== 'disabled') {
+    account.status = 'active';
+  }
+
+  persist();
+  return account;
+}
+
+async function enable(id) {
+  const account = getAccountById(id);
+  await ensureValidJwt(account, { preserveDisabled: false });
+  account.status = 'active';
+  clearAccountError(account);
   persist();
   return account;
 }
 
 async function getQuotaForAccount(id) {
-  const account = accounts.find(a => a.id === id);
-  if (!account) throw new Error('Account not found');
-  const jwt = await ensureValidJwt(account);
+  const account = getAccountById(id);
+  const jwt = await ensureValidJwt(account, { preserveDisabled: account.status === 'disabled' });
   return jb.getQuota(jwt);
 }
 
 function startRefreshLoop() {
   if (refreshTimer) clearInterval(refreshTimer);
+
   refreshTimer = setInterval(async () => {
     for (const account of accounts) {
       if (account.status === 'active') {
@@ -226,6 +270,7 @@ function startRefreshLoop() {
       }
 
       if (account.status !== 'error') continue;
+
       try {
         if (!shouldAutoRetryErrorAccount(account)) continue;
         account.last_recovery_attempt_at = Date.now();
@@ -242,13 +287,20 @@ function getRefreshPolicy() {
   return loadConfig().refresh_policy || {};
 }
 
+function getAccountById(id) {
+  const account = accounts.find(item => item.id === id);
+  if (!account) throw new Error('Account not found');
+  return account;
+}
+
 function classifyAccountError(err) {
   if (err instanceof jb.JBRequestError) return err.type || 'unknown';
   return 'unknown';
 }
 
-function markAccountError(account, stage, err) {
-  account.status = 'error';
+function markAccountError(account, stage, err, opts = {}) {
+  const preserveDisabled = Boolean(opts.preserveDisabled && account.status === 'disabled');
+  account.status = preserveDisabled ? 'disabled' : 'error';
   account.last_error_type = classifyAccountError(err);
   account.last_error_at = Date.now();
   account.last_error_stage = stage;
@@ -288,7 +340,18 @@ function markStatus(account, status) {
 }
 
 module.exports = {
-  init, getAll, addFromOAuth, addManual, remove, updateLicenseId,
-  getNext, ensureValidJwt, forceRefresh, getQuotaForAccount,
+  init,
+  getAll,
+  addFromOAuth,
+  addManual,
+  remove,
+  disable,
+  enable,
+  bulkDisable,
+  updateLicenseId,
+  getNext,
+  ensureValidJwt,
+  forceRefresh,
+  getQuotaForAccount,
   markStatus,
 };

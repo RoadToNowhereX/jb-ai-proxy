@@ -97,8 +97,12 @@
     </div>
 
     <section class="card">
-      <h2>账号列表 <button class="btn-sm" onclick="loadAccounts()">刷新</button></h2>
+      <div class="section-header">
+        <h2>账号列表</h2>
+        <button class="btn-sm" onclick="loadAccounts()">刷新</button>
+      </div>
       <p id="accounts-summary" class="muted"></p>
+      <div id="accounts-bulk-actions" class="accounts-bulk-actions"></div>
       <div id="accounts-list">
         <p class="muted">加载中...</p>
       </div>
