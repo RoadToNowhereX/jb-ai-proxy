@@ -27,6 +27,9 @@ function getAll() {
     last_error_at: account.last_error_at || null,
     last_error_message: account.last_error_message || null,
     last_recovery_attempt_at: account.last_recovery_attempt_at || null,
+    quota_used: account.quota_used,
+    quota_max: account.quota_max,
+    quota_updated_at: account.quota_updated_at,
   }));
 }
 
@@ -252,7 +255,17 @@ async function enable(id) {
 async function getQuotaForAccount(id) {
   const account = getAccountById(id);
   const jwt = await ensureValidJwt(account, { preserveDisabled: account.status === 'disabled' });
-  return jb.getQuota(jwt);
+  const quotaData = await jb.getQuota(jwt);
+  
+  const used = parseFloat(quotaData.current?.tariffQuota?.current?.amount || quotaData.current?.current?.amount || 0);
+  const max = parseFloat(quotaData.current?.tariffQuota?.maximum?.amount || quotaData.current?.maximum?.amount || 1000000);
+  
+  account.quota_used = used;
+  account.quota_max = max;
+  account.quota_updated_at = Date.now();
+  persist();
+  
+  return quotaData;
 }
 
 function startRefreshLoop() {

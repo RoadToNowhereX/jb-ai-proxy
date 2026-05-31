@@ -135,7 +135,17 @@ function renderAccounts() {
   const pageAccounts = getCurrentPageAccounts();
   renderBulkActions(pageAccounts);
 
-  container.innerHTML = pageAccounts.map(acc => `
+  container.innerHTML = pageAccounts.map(acc => {
+    let quotaHtml = '';
+    if (acc.quota_max !== undefined && acc.quota_used !== undefined) {
+      const pct = Math.max(0, Math.min(100, ((acc.quota_max - acc.quota_used) / acc.quota_max) * 100));
+      quotaHtml = `
+        <div class="account-meta" style="margin-top: 4px;">已用 ${acc.quota_used.toFixed(0)} / ${acc.quota_max.toFixed(0)}</div>
+        <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
+      `;
+    }
+
+    return `
     <div class="account-row ${acc.status === 'disabled' ? 'account-row-disabled' : ''}">
       <label class="account-select-cell">
         <input
@@ -154,10 +164,10 @@ function renderAccounts() {
           ${acc.last_error_type ? `<span>错误类型 ${esc(acc.last_error_type)}</span>` : ''}
         </div>
         ${acc.last_error_message ? `<div class="account-error">${esc(acc.last_error_message)}</div>` : ''}
-        <div id="quota-${acc.id}"></div>
+        <div id="quota-${acc.id}">${quotaHtml}</div>
       </div>
       <div class="account-actions">
-        <button class="btn-sm" onclick="withLoading(this, '查询中...', () => loadQuota('${acc.id}'))">额度</button>
+        <button class="btn-sm" onclick="withLoading(this, '查询中...', () => loadQuota('${acc.id}'))">查额度</button>
         ${acc.status === 'disabled'
           ? `<button class="btn-sm btn-success" onclick="enableAccount(this, '${acc.id}')">启用</button>`
           : `
@@ -167,7 +177,7 @@ function renderAccounts() {
         <button class="btn-danger" onclick="deleteAccount(this, '${acc.id}')">删除</button>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 
   if (totalPages <= 1) {
     pagEl.innerHTML = '';
@@ -239,9 +249,9 @@ function statusText(status) {
   return map[status] || status;
 }
 
-async function loadQuota(id) {
+async function loadQuota(id, silent = false) {
   const el = document.getElementById(`quota-${id}`);
-  el.innerHTML = '<span class="muted">查询中...</span>';
+  if (el && !silent) el.innerHTML = '<span class="muted">查询中...</span>';
 
   try {
     const res = await fetch(`/api/accounts/${id}/quota`);
@@ -252,13 +262,54 @@ async function loadQuota(id) {
     const max = parseFloat(data.current?.tariffQuota?.maximum?.amount || data.current?.maximum?.amount || 1000000);
     const pct = Math.max(0, Math.min(100, ((max - used) / max) * 100));
 
-    el.innerHTML = `
-      <div class="account-meta">已用 ${used.toFixed(0)} / ${max.toFixed(0)}</div>
-      <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
-    `;
+    // Update local cache
+    const acc = allAccounts.find(a => a.id === id);
+    if (acc) {
+      acc.quota_used = used;
+      acc.quota_max = max;
+    }
+
+    if (el) {
+      el.innerHTML = `
+        <div class="account-meta" style="margin-top: 4px;">已用 ${used.toFixed(0)} / ${max.toFixed(0)}</div>
+        <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
+      `;
+    }
   } catch (err) {
-    el.innerHTML = `<span class="muted">${esc(err.message)}</span>`;
+    if (el && !silent) el.innerHTML = `<span class="muted">${esc(err.message)}</span>`;
+    if (!silent) throw err;
   }
+}
+
+async function checkAllQuotas(btn) {
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  
+  const targetAccounts = allAccounts.filter(a => a.status !== 'disabled');
+  let successCount = 0;
+  let failCount = 0;
+  let processed = 0;
+
+  btn.textContent = `查询中... 0/${targetAccounts.length}`;
+
+  for (const account of targetAccounts) {
+    try {
+      await loadQuota(account.id, true);
+      successCount++;
+    } catch (err) {
+      failCount++;
+    }
+    processed++;
+    btn.textContent = `查询中... ${processed}/${targetAccounts.length}`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = originalText;
+  
+  // Refresh accounts view to ensure everything is rendered, 
+  // though loadQuota already updates visible elements.
+  renderAccounts();
+  alert(`查询完成！成功: ${successCount}, 失败: ${failCount}`);
 }
 
 async function refreshAccount(id) {

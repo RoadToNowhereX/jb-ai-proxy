@@ -99,7 +99,10 @@
     <section class="card">
       <div class="section-header">
         <h2>账号列表</h2>
-        <button class="btn-sm" onclick="loadAccounts()">刷新</button>
+        <div>
+          <button class="btn-sm" onclick="checkAllQuotas(this)">一键查询额度</button>
+          <button class="btn-sm" onclick="loadAccounts()">刷新</button>
+        </div>
       </div>
       <p id="accounts-summary" class="muted"></p>
       <div id="accounts-bulk-actions" class="accounts-bulk-actions"></div>
