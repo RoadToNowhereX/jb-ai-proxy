@@ -12,6 +12,12 @@ const DEFAULT_CONFIG = {
     name: 'aia:idea',
     version: '261.22158.366:261.22158.277',
   },
+  grazie_agents: [
+    { name: 'aia:idea', version: '261.22158.366:261.22158.277' },
+    { name: 'aia:clion', version: '261.24374.148:261.24374.208' },
+    { name: 'aia:rider', version: '261.24374.190:261.24374.190' },
+    { name: 'aia:pycharm', version: '2261.22158.340:261.22158.366' },
+  ],
   refresh_policy: {
     max_retries: 2,
     retry_delay_ms: 1500,
@@ -28,6 +34,7 @@ function mergeConfig(input = {}) {
       ...DEFAULT_CONFIG.grazie_agent,
       ...(input.grazie_agent || {}),
     },
+    grazie_agents: input.grazie_agents || DEFAULT_CONFIG.grazie_agents,
     refresh_policy: {
       ...DEFAULT_CONFIG.refresh_policy,
       ...(input.refresh_policy || {}),

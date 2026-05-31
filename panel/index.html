@@ -111,6 +111,24 @@
       </form>
     </div>
 
+    <div id="agent-modal" class="modal hidden" onclick="if(event.target===this) hideAgentForm()">
+      <div class="modal-content">
+        <h3>选择标识 (Grazie Agent)</h3>
+        <p class="muted">为 <span id="agent-account-email" style="font-weight: bold;"></span> 选择使用的客户端标识。</p>
+        <input type="hidden" id="agent-account-id">
+        <div class="form-group" style="margin-top: 16px;">
+          <label>标识列表 (由 config.json 提供)</label>
+          <select id="agent-select" required style="width: 100%; padding: 8px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 8px;">
+            <option value="">(默认) aia:idea</option>
+          </select>
+        </div>
+        <div class="form-actions" style="margin-top: 20px;">
+          <button type="button" class="btn btn-primary" onclick="saveAgent(this)">保存选择</button>
+          <button type="button" class="btn btn-secondary" onclick="hideAgentForm()">取消</button>
+        </div>
+      </div>
+    </div>
+
     <section class="card">
       <div class="section-header">
         <h2>账号列表</h2>

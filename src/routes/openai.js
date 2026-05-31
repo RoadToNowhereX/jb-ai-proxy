@@ -54,7 +54,7 @@ router.post('/v1/chat/completions', async (req, res) => {
     // profiles that the native endpoint doesn't accept.
     const jbBody = convertRequest(req.body);
     const call = endpointFor(req.body.model) === 'responses' ? jb.responsesStream : jb.chatStream;
-    const jbRes = await call(jwt, jbBody);
+    const jbRes = await call(jwt, jbBody, account);
 
     if (!jbRes.ok) {
       const errText = await jbRes.text();

@@ -37,7 +37,7 @@ router.post('/v1/messages', async (req, res) => {
     // calling GPT or Gemini through /v1/messages).
     const jbBody = convertRequest(req.body);
     const call = endpointFor(req.body.model) === 'responses' ? jb.responsesStream : jb.chatStream;
-    const jbRes = await call(jwt, jbBody);
+    const jbRes = await call(jwt, jbBody, account);
 
     if (!jbRes.ok) {
       const errText = await jbRes.text();

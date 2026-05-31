@@ -205,8 +205,15 @@ async function getQuota(jwt) {
   return res.json();
 }
 
-function llmStream(jwt, body, path) {
+function llmStream(jwt, body, path, account = null) {
   const config = loadConfig();
+  const pool = config.grazie_agents || [];
+  let agent = config.grazie_agent;
+  if (account && account.grazie_agent) {
+    const match = pool.find(a => a.name === account.grazie_agent);
+    if (match) agent = match;
+  }
+
   return fetchWithRetry(`${JB_API_BASE}${path}`, {
     method: 'POST',
     headers: {
@@ -215,29 +222,36 @@ function llmStream(jwt, body, path) {
       'Accept-Charset': 'UTF-8',
       'Cache-Control': 'no-cache',
       'grazie-authenticate-jwt': jwt,
-      'grazie-agent': JSON.stringify(config.grazie_agent),
+      'grazie-agent': JSON.stringify(agent),
       'User-Agent': 'ktor-client',
     },
     body: JSON.stringify(body),
   });
 }
 
-function chatStream(jwt, body) {
-  return llmStream(jwt, body, '/user/v5/llm/chat/stream/v8');
+function chatStream(jwt, body, account = null) {
+  return llmStream(jwt, body, '/user/v5/llm/chat/stream/v8', account);
 }
 
-function responsesStream(jwt, body) {
-  return llmStream(jwt, body, '/user/v5/llm/responses/stream/v8');
+function responsesStream(jwt, body, account = null) {
+  return llmStream(jwt, body, '/user/v5/llm/responses/stream/v8', account);
 }
 
-function nativeProxy(jwt, body, path, signal) {
+function nativeProxy(jwt, body, path, signal, account = null) {
   const config = loadConfig();
+  const pool = config.grazie_agents || [];
+  let agent = config.grazie_agent;
+  if (account && account.grazie_agent) {
+    const match = pool.find(a => a.name === account.grazie_agent);
+    if (match) agent = match;
+  }
+
   return fetchWithRetry(`${JB_API_BASE}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'grazie-authenticate-jwt': jwt,
-      'grazie-agent': JSON.stringify(config.grazie_agent),
+      'grazie-agent': JSON.stringify(agent),
       'User-Agent': 'ktor-client',
     },
     body: JSON.stringify(body),
@@ -245,20 +259,20 @@ function nativeProxy(jwt, body, path, signal) {
   });
 }
 
-function nativeAnthropicMessages(jwt, body, signal) {
-  return nativeProxy(jwt, body, '/user/v5/llm/anthropic/v1/messages', signal);
+function nativeAnthropicMessages(jwt, body, signal, account = null) {
+  return nativeProxy(jwt, body, '/user/v5/llm/anthropic/v1/messages', signal, account);
 }
 
-function nativeOpenaiChatCompletions(jwt, body, signal) {
-  return nativeProxy(jwt, body, '/user/v5/llm/openai/v1/chat/completions', signal);
+function nativeOpenaiChatCompletions(jwt, body, signal, account = null) {
+  return nativeProxy(jwt, body, '/user/v5/llm/openai/v1/chat/completions', signal, account);
 }
 
-function nativeOpenaiResponses(jwt, body, signal) {
-  return nativeProxy(jwt, body, '/user/v5/llm/openai/v1/responses', signal);
+function nativeOpenaiResponses(jwt, body, signal, account = null) {
+  return nativeProxy(jwt, body, '/user/v5/llm/openai/v1/responses', signal, account);
 }
 
-function nativeXaiResponses(jwt, body, signal) {
-  return nativeProxy(jwt, body, '/user/v5/llm/xai/v1/responses', signal);
+function nativeXaiResponses(jwt, body, signal, account = null) {
+  return nativeProxy(jwt, body, '/user/v5/llm/xai/v1/responses', signal, account);
 }
 
 function decodeJwtPayload(token) {

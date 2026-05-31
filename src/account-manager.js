@@ -32,6 +32,7 @@ function getAll() {
     quota_used: account.quota_used,
     quota_max: account.quota_max,
     quota_updated_at: account.quota_updated_at,
+    grazie_agent: account.grazie_agent,
   }));
 }
 
@@ -71,6 +72,7 @@ async function addFromOAuth(tokens, licenseId) {
     status: 'active',
     added_at: Date.now(),
     last_used_at: null,
+    grazie_agent: null,
   };
 
   await refreshJwt(account);
@@ -115,6 +117,7 @@ async function addManual(refreshToken, licenseId) {
     status: 'active',
     added_at: Date.now(),
     last_used_at: null,
+    grazie_agent: null,
   };
 
   await refreshJwt(account);
@@ -223,6 +226,13 @@ async function updateLicenseId(id, licenseId) {
   }
 
   await refreshJwt(account, { preserveDisabled: account.status === 'disabled' });
+  persist();
+  return account;
+}
+
+function updateGrazieAgent(id, agentName) {
+  const account = getAccountById(id);
+  account.grazie_agent = agentName || null;
   persist();
   return account;
 }
@@ -389,6 +399,7 @@ module.exports = {
   enable,
   bulkDisable,
   updateLicenseId,
+  updateGrazieAgent,
   getNext,
   ensureValidJwt,
   forceRefresh,

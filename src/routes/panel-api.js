@@ -13,6 +13,10 @@ router.get('/api/settings/refresh-policy', (req, res) => {
   res.json(loadConfig().refresh_policy || {});
 });
 
+router.get('/api/settings/grazie-agents', (req, res) => {
+  res.json(loadConfig().grazie_agents || []);
+});
+
 router.post('/api/settings/refresh-policy', (req, res) => {
   const config = loadConfig();
   const current = config.refresh_policy || {};
@@ -127,6 +131,16 @@ router.post('/api/accounts/:id/license', async (req, res) => {
   try {
     const account = await accountManager.updateLicenseId(req.params.id, license_id);
     res.json({ id: account.id, email: account.email, status: account.status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/accounts/:id/grazie-agent', (req, res) => {
+  const { agent_name } = req.body;
+  try {
+    const account = accountManager.updateGrazieAgent(req.params.id, agent_name);
+    res.json({ id: account.id, email: account.email, status: account.status, grazie_agent: account.grazie_agent });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

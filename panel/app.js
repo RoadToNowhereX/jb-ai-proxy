@@ -5,6 +5,8 @@ let allAccounts = [];
 let currentPage = 1;
 let selectedAccountIds = new Set();
 
+let agentPool = [];
+
 document.addEventListener('DOMContentLoaded', async () => {
   const res = await fetch('/api/accounts');
   if (res.status === 401) {
@@ -14,8 +16,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadRefreshPolicy();
   await loadQuotaSettings();
+  await loadAgentPool();
   await loadAccounts();
 });
+
+async function loadAgentPool() {
+  try {
+    const res = await fetch('/api/settings/grazie-agents');
+    agentPool = await res.json();
+  } catch (err) {
+    console.error('Failed to load agent pool', err);
+  }
+}
 
 async function withLoading(btn, text, fn) {
   const originalText = btn.textContent;
@@ -200,12 +212,14 @@ function renderAccounts() {
         <div class="account-meta">
           <span class="status status-${acc.status}">${statusText(acc.status)}</span>
           <span>${esc(acc.license_id || '')}</span>
+          ${acc.grazie_agent ? `<span>Agent: ${esc(acc.grazie_agent)}</span>` : ''}
           ${acc.last_error_type ? `<span>错误类型 ${esc(acc.last_error_type)}</span>` : ''}
         </div>
         ${acc.last_error_message ? `<div class="account-error">${esc(acc.last_error_message)}</div>` : ''}
         <div id="quota-${acc.id}">${quotaHtml}</div>
       </div>
       <div class="account-actions">
+        <button class="btn-sm" onclick="showAgentForm('${acc.id}', '${acc.email}', '${acc.grazie_agent || ''}')">选择标识</button>
         <button class="btn-sm" onclick="withLoading(this, '查询中...', () => loadQuota('${acc.id}'))">查额度</button>
         ${acc.status === 'disabled'
           ? `<button class="btn-sm btn-success" onclick="enableAccount(this, '${acc.id}')">启用</button>`
@@ -483,6 +497,44 @@ async function addManual(e) {
     await loadAccounts();
   }).catch(err => {
     alert(`添加失败: ${err.message}`);
+  });
+}
+
+function showAgentForm(id, email, currentAgent) {
+  document.getElementById('agent-modal').classList.remove('hidden');
+  document.getElementById('agent-account-id').value = id;
+  document.getElementById('agent-account-email').textContent = email;
+  
+  const select = document.getElementById('agent-select');
+  select.innerHTML = '<option value="">(默认) aia:idea</option>' + 
+    agentPool.map(a => `<option value="${esc(a.name)}">${esc(a.name)} (${esc(a.version)})</option>`).join('');
+  
+  if (currentAgent) {
+    select.value = currentAgent;
+  } else {
+    select.value = "";
+  }
+}
+
+function hideAgentForm() {
+  document.getElementById('agent-modal').classList.add('hidden');
+}
+
+async function saveAgent(btn) {
+  const id = document.getElementById('agent-account-id').value;
+  const agent_name = document.getElementById('agent-select').value;
+  await withLoading(btn, '保存中...', async () => {
+    const res = await fetch(`/api/accounts/${id}/grazie-agent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agent_name: agent_name || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存失败');
+    hideAgentForm();
+    await loadAccounts();
+  }).catch(err => {
+    alert(`保存失败: ${err.message}`);
   });
 }
 

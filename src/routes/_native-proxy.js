@@ -28,7 +28,7 @@ async function pipeNativeProxy(req, res, opts) {
 
   let jbRes;
   try {
-    jbRes = await nativeCall(jwt, body, ctrl.signal);
+    jbRes = await nativeCall(jwt, body, ctrl.signal, account);
   } catch (err) {
     req.off('close', onClose);
     if (err.name === 'AbortError') return;
