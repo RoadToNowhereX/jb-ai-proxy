@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await loadRefreshPolicy();
+  await loadQuotaSettings();
   await loadAccounts();
 });
 
@@ -79,6 +80,44 @@ async function saveRefreshPolicy(e) {
     msg.textContent = '策略已保存';
   }).catch(err => {
     msg.textContent = `保存策略失败: ${esc(err.message)}`;
+  });
+}
+
+async function loadQuotaSettings() {
+  const msg = document.getElementById('quota-save-msg');
+  if (msg) msg.textContent = '加载设置中...';
+
+  try {
+    const res = await fetch('/api/settings/quota');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载设置失败');
+
+    const el = document.getElementById('quota-refresh-interval');
+    if (el) el.value = data.quota_refresh_interval ?? 60;
+
+    if (msg) msg.textContent = '当前设置已加载';
+  } catch (err) {
+    if (msg) msg.textContent = `加载设置失败: ${esc(err.message)}`;
+  }
+}
+
+async function saveQuotaSettings(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  const msg = document.getElementById('quota-save-msg');
+
+  await withLoading(btn, '保存中...', async () => {
+    const interval = Number(document.getElementById('quota-refresh-interval').value);
+    const res = await fetch('/api/settings/quota', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quota_refresh_interval: interval }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存设置失败');
+    msg.textContent = '设置已保存';
+  }).catch(err => {
+    msg.textContent = `保存设置失败: ${esc(err.message)}`;
   });
 }
 

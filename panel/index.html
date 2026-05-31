@@ -57,6 +57,21 @@
       </form>
     </section>
 
+    <section class="card">
+      <h2>后台任务设置</h2>
+      <p class="muted">配置自动刷新账号额度的后台任务。</p>
+      <form id="quota-settings-form" onsubmit="saveQuotaSettings(event)">
+        <div class="form-group">
+          <label>自动刷新所有未停用账号额度的间隔时间（分钟，0 为禁用）</label>
+          <input type="number" id="quota-refresh-interval" min="0" required>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">保存设置</button>
+        </div>
+        <p id="quota-save-msg" class="muted"></p>
+      </form>
+    </section>
+
     <div id="oauth-form" class="card hidden">
       <h3>第一步：<a id="oauth-url" class="step-link" href="#" target="_blank">点击这里前往 JetBrains 登录</a></h3>
       <p class="step-hint">登录授权后，浏览器会跳转到一个以 `http://localhost:...` 开头的地址。把完整回调 URL 粘贴到下面。</p>

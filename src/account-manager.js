@@ -5,6 +5,7 @@ const jb = require('./jb-client');
 let accounts = [];
 let roundRobinIndex = 0;
 let refreshTimer = null;
+let quotaRefreshTimer = null;
 
 function init() {
   accounts = loadCredentials().map(account => ({
@@ -12,6 +13,7 @@ function init() {
     status: account.status || 'active',
   }));
   startRefreshLoop();
+  startQuotaRefreshLoop();
   console.log(`Account manager: loaded ${accounts.length} account(s)`);
 }
 
@@ -294,6 +296,31 @@ function startRefreshLoop() {
       }
     }
   }, 600000);
+}
+
+function startQuotaRefreshLoop() {
+  if (quotaRefreshTimer) clearInterval(quotaRefreshTimer);
+
+  quotaRefreshTimer = setInterval(async () => {
+    const intervalMinutes = loadConfig().quota_refresh_interval ?? 60;
+    if (intervalMinutes <= 0) return; // 0 means disabled
+    
+    const intervalMs = intervalMinutes * 60 * 1000;
+    const now = Date.now();
+
+    for (const account of accounts) {
+      if (account.status === 'disabled') continue;
+      
+      const lastUpdated = account.quota_updated_at || 0;
+      if (now - lastUpdated > intervalMs) {
+        try {
+          await getQuotaForAccount(account.id);
+        } catch (err) {
+          console.error(`Auto quota refresh failed for ${account.email}: ${err.message}`);
+        }
+      }
+    }
+  }, 60000); // Check every minute
 }
 
 function getRefreshPolicy() {

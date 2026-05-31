@@ -45,6 +45,25 @@ router.post('/api/settings/refresh-policy', (req, res) => {
   res.json(next.refresh_policy);
 });
 
+router.get('/api/settings/quota', (req, res) => {
+  res.json({ quota_refresh_interval: loadConfig().quota_refresh_interval ?? 60 });
+});
+
+router.post('/api/settings/quota', (req, res) => {
+  const { quota_refresh_interval } = req.body;
+  if (!Number.isInteger(quota_refresh_interval) || quota_refresh_interval < 0) {
+    return res.status(400).json({ error: 'quota_refresh_interval must be an integer >= 0 (0 means disabled)' });
+  }
+
+  const config = loadConfig();
+  const next = saveConfig({
+    ...config,
+    quota_refresh_interval,
+  });
+
+  res.json({ quota_refresh_interval: next.quota_refresh_interval });
+});
+
 router.post('/api/accounts/manual', async (req, res) => {
   const { refresh_token, license_id } = req.body;
   if (!refresh_token) {
