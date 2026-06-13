@@ -33,5 +33,6 @@
       "timeout",
       "server_error"
     ]
-  }
+  },
+  "quota_refresh_interval": 60
 }
