@@ -72,43 +72,47 @@
       </form>
     </section>
 
-    <div id="oauth-form" class="card hidden">
-      <h3>第一步：<a id="oauth-url" class="step-link" href="#" target="_blank">点击这里前往 JetBrains 登录</a></h3>
-      <p class="step-hint">登录授权后，浏览器会跳转到一个以 `http://localhost:...` 开头的地址。把完整回调 URL 粘贴到下面。</p>
+    <div id="oauth-form" class="modal hidden" onclick="if(event.target===this) hideOAuthForm()">
+      <div class="modal-content">
+        <h3>第一步：<a id="oauth-url" class="step-link" href="#" target="_blank">点击这里前往 JetBrains 登录</a></h3>
+        <p class="step-hint">登录授权后，浏览器会跳转到一个以 `http://localhost:...` 开头的地址。把完整回调 URL 粘贴到下面。</p>
 
-      <h3>第二步：填写回调 URL 和 License ID</h3>
-      <form onsubmit="submitOAuthCallback(event)">
-        <div class="form-group">
-          <label>回调 URL</label>
-          <input type="text" id="oauth-callback" required placeholder="http://localhost:3000/?code=xxx&state=xxx">
-        </div>
-        <div class="form-group">
-          <label>License ID，可在 <a href="https://account.jetbrains.com/licenses" target="_blank">account.jetbrains.com/licenses</a> 查看</label>
-          <input type="text" id="oauth-license" required placeholder="ULJX59IS80">
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">提交</button>
-          <button type="button" class="btn btn-secondary" onclick="hideOAuthForm()">取消</button>
-        </div>
-      </form>
+        <h3>第二步：填写回调 URL 和 License ID</h3>
+        <form onsubmit="submitOAuthCallback(event)">
+          <div class="form-group">
+            <label>回调 URL</label>
+            <input type="text" id="oauth-callback" required placeholder="http://localhost:3000/?code=xxx&state=xxx">
+          </div>
+          <div class="form-group">
+            <label>License ID，可在 <a href="https://account.jetbrains.com/licenses" target="_blank">account.jetbrains.com/licenses</a> 查看</label>
+            <input type="text" id="oauth-license" required placeholder="ULJX59IS80">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">提交</button>
+            <button type="button" class="btn btn-secondary" onclick="hideOAuthForm()">取消</button>
+          </div>
+        </form>
+      </div>
     </div>
 
-    <div id="manual-form" class="card hidden">
-      <h3>手动导入</h3>
-      <form onsubmit="addManual(event)">
-        <div class="form-group">
-          <label>Refresh Token</label>
-          <input type="text" id="manual-rt" required placeholder="uk0HfOcIf57KXgyd...">
-        </div>
-        <div class="form-group">
-          <label>License ID</label>
-          <input type="text" id="manual-lid" required placeholder="ULJX59IS80">
-        </div>
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">添加</button>
-          <button type="button" class="btn btn-secondary" onclick="hideManualForm()">取消</button>
-        </div>
-      </form>
+    <div id="manual-form" class="modal hidden" onclick="if(event.target===this) hideManualForm()">
+      <div class="modal-content">
+        <h3>手动导入</h3>
+        <form onsubmit="addManual(event)">
+          <div class="form-group">
+            <label>Refresh Token</label>
+            <input type="text" id="manual-rt" required placeholder="uk0HfOcIf57KXgyd...">
+          </div>
+          <div class="form-group">
+            <label>License ID</label>
+            <input type="text" id="manual-lid" required placeholder="ULJX59IS80">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">添加</button>
+            <button type="button" class="btn btn-secondary" onclick="hideManualForm()">取消</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <div id="agent-modal" class="modal hidden" onclick="if(event.target===this) hideAgentForm()">
