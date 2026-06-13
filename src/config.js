@@ -24,6 +24,8 @@ const DEFAULT_CONFIG = {
     auto_retry_on_error: true,
     auto_retry_types: ['network', 'server_error'],
   },
+  quota_refresh_interval: 60,
+  quota_min_remaining_percent: 10,
 };
 
 function mergeConfig(input = {}) {
@@ -39,6 +41,8 @@ function mergeConfig(input = {}) {
       ...DEFAULT_CONFIG.refresh_policy,
       ...(input.refresh_policy || {}),
     },
+    quota_refresh_interval: input.quota_refresh_interval ?? DEFAULT_CONFIG.quota_refresh_interval,
+    quota_min_remaining_percent: input.quota_min_remaining_percent ?? DEFAULT_CONFIG.quota_min_remaining_percent,
   };
 }
 

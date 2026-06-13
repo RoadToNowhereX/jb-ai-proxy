@@ -3,7 +3,6 @@ const { loadConfig, loadCredentials, saveCredentials } = require('./config');
 const jb = require('./jb-client');
 
 let accounts = [];
-let roundRobinIndex = 0;
 let refreshTimer = null;
 let quotaRefreshTimer = null;
 
@@ -157,14 +156,67 @@ function bulkDisable(ids) {
   return { ok: true, updated };
 }
 
+/**
+ * Returns a value in [0, 1] representing the remaining quota fraction,
+ * or null if quota data is unavailable / invalid.
+ */
+function getRemainingQuotaPercent(account) {
+  const max = account.quota_max;
+  if (typeof max !== 'number' || !isFinite(max) || max <= 0) return null;
+  const used = typeof account.quota_used === 'number' && isFinite(account.quota_used)
+    ? account.quota_used
+    : 0;
+  return Math.max(0, Math.min(1, (max - used) / max));
+}
+
+/**
+ * Returns a positive weight (0..1) for use in Smooth WRR.
+ * Accounts with unknown or invalid quota data return null (excluded from scheduling).
+ */
+function getAccountWeight(account) {
+  const pct = getRemainingQuotaPercent(account);
+  if (pct === null) return null;
+  return pct; // weight = remaining fraction
+}
+
 function getNext() {
+  const cfg = loadConfig();
+  // threshold is a percentage value 0-100; convert to fraction
+  const thresholdFraction = (cfg.quota_min_remaining_percent ?? 10) / 100;
+
+  // Only active accounts participate
   const active = accounts.filter(account => account.status === 'active');
   if (active.length === 0) return null;
 
-  const account = active[roundRobinIndex % active.length];
-  roundRobinIndex++;
-  account.last_used_at = Date.now();
-  return account;
+  // Separate candidates: accounts with valid quota above threshold
+  const candidates = active.filter(account => {
+    const pct = getRemainingQuotaPercent(account);
+    if (pct === null) return false; // unknown quota → excluded
+    return pct > thresholdFraction;  // <= threshold → skip
+  });
+
+  if (candidates.length === 0) return null;
+
+  // Smooth Weighted Round-Robin
+  // Each account accumulates its weight each round; the highest wins and
+  // has the total weight subtracted, distributing load proportionally.
+  for (const acc of candidates) {
+    const w = getAccountWeight(acc);
+    acc._smooth_weight = (acc._smooth_weight || 0) + w;
+  }
+
+  // Pick the one with the highest current smooth weight
+  let best = candidates[0];
+  for (const acc of candidates) {
+    if (acc._smooth_weight > best._smooth_weight) best = acc;
+  }
+
+  // Subtract total weight from the winner
+  const totalWeight = candidates.reduce((sum, acc) => sum + getAccountWeight(acc), 0);
+  best._smooth_weight -= totalWeight;
+
+  best.last_used_at = Date.now();
+  return best;
 }
 
 async function ensureValidJwt(account, opts = {}) {

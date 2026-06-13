@@ -104,8 +104,11 @@ async function loadQuotaSettings() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '加载设置失败');
 
-    const el = document.getElementById('quota-refresh-interval');
-    if (el) el.value = data.quota_refresh_interval ?? 60;
+    const elInterval = document.getElementById('quota-refresh-interval');
+    if (elInterval) elInterval.value = data.quota_refresh_interval ?? 60;
+
+    const elThreshold = document.getElementById('quota-min-remaining-percent');
+    if (elThreshold) elThreshold.value = data.quota_min_remaining_percent ?? 10;
 
     if (msg) msg.textContent = '当前设置已加载';
   } catch (err) {
@@ -120,10 +123,19 @@ async function saveQuotaSettings(e) {
 
   await withLoading(btn, '保存中...', async () => {
     const interval = Number(document.getElementById('quota-refresh-interval').value);
+    const threshold = Number(document.getElementById('quota-min-remaining-percent').value);
+
+    if (!Number.isInteger(threshold) || threshold < 0 || threshold > 100) {
+      throw new Error('轮询最低额度阈值必须为 0 到 100 之间的整数');
+    }
+
     const res = await fetch('/api/settings/quota', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quota_refresh_interval: interval }),
+      body: JSON.stringify({
+        quota_refresh_interval: interval,
+        quota_min_remaining_percent: threshold,
+      }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '保存设置失败');

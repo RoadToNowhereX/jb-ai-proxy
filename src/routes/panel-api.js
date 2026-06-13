@@ -50,22 +50,33 @@ router.post('/api/settings/refresh-policy', (req, res) => {
 });
 
 router.get('/api/settings/quota', (req, res) => {
-  res.json({ quota_refresh_interval: loadConfig().quota_refresh_interval ?? 60 });
+  const cfg = loadConfig();
+  res.json({
+    quota_refresh_interval: cfg.quota_refresh_interval ?? 60,
+    quota_min_remaining_percent: cfg.quota_min_remaining_percent ?? 10,
+  });
 });
 
 router.post('/api/settings/quota', (req, res) => {
-  const { quota_refresh_interval } = req.body;
+  const { quota_refresh_interval, quota_min_remaining_percent } = req.body;
   if (!Number.isInteger(quota_refresh_interval) || quota_refresh_interval < 0) {
     return res.status(400).json({ error: 'quota_refresh_interval must be an integer >= 0 (0 means disabled)' });
+  }
+  if (!Number.isInteger(quota_min_remaining_percent) || quota_min_remaining_percent < 0 || quota_min_remaining_percent > 100) {
+    return res.status(400).json({ error: 'quota_min_remaining_percent must be an integer between 0 and 100' });
   }
 
   const config = loadConfig();
   const next = saveConfig({
     ...config,
     quota_refresh_interval,
+    quota_min_remaining_percent,
   });
 
-  res.json({ quota_refresh_interval: next.quota_refresh_interval });
+  res.json({
+    quota_refresh_interval: next.quota_refresh_interval,
+    quota_min_remaining_percent: next.quota_min_remaining_percent,
+  });
 });
 
 router.post('/api/accounts/manual', async (req, res) => {
