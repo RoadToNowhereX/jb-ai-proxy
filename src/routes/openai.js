@@ -38,11 +38,19 @@ router.post('/v1/chat/completions', async (req, res) => {
 
     const jwt = await accountManager.ensureValidJwt(account);
 
-    // Native OpenAI passthrough — route GPT/o-series requests directly to
+    // Native OpenAI passthrough - route GPT/o-series requests directly to
     // the JB /openai/v1/chat/completions endpoint, preserving native fields
     // (response_format, logprobs, parallel_tool_calls, etc.) unchanged.
     const mapping = modelId.resolve(req.body.model);
     if (mapping && mapping.family === 'openai') {
+
+      // JB's /v1/chat/completions rejects tools + reasoning_effort together.
+      // Strip reasoning_effort when function tools are present so the
+      // native proxy call succeeds.
+      if (req.body.tools && req.body.tools.some(t => t.type === 'function') && req.body.reasoning_effort) {
+        delete req.body.reasoning_effort;
+      }
+
       return pipeNativeProxy(req, res, {
         nativeCall: jb.nativeOpenaiChatCompletions,
         account, jwt, nativeId: mapping.nativeId,
