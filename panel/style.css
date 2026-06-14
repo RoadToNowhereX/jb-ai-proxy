@@ -235,7 +235,7 @@ code {
 .account-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
   padding: 14px 0;
   border-bottom: 1px solid #f1f5f9;
 }
@@ -260,15 +260,24 @@ code {
 }
 
 .account-info {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.account-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
 .account-email {
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 500;
   font-size: 14px;
   color: #0f172a;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .account-meta {
@@ -288,7 +297,42 @@ code {
   flex-wrap: wrap;
   justify-content: flex-end;
   flex-shrink: 0;
-  margin-left: 12px;
+  max-width: 250px;
+  margin-left: 6px;
+}
+
+.info-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.weight-pill {
+  flex: 0 0 auto;
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.quota-line {
+  margin-top: 4px;
+  color: #000;
+  font-size: 12px;
+}
+
+.date-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .status {
@@ -457,8 +501,13 @@ code {
     flex-wrap: wrap;
   }
 
+  .account-title-row {
+    flex-wrap: wrap;
+  }
+
   .account-actions {
     width: 100%;
+    max-width: none;
     margin-left: 28px;
     justify-content: flex-start;
   }

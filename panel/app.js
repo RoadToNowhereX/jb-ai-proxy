@@ -212,7 +212,7 @@ async function loadAccounts() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '加载账号失败');
 
-    allAccounts = Array.isArray(data) ? data : [];
+    allAccounts = Array.isArray(data) ? sortAccountsByWeight(data) : [];
     currentPage = 1;
     renderAccounts();
   } catch (err) {
@@ -257,6 +257,7 @@ function renderAccounts() {
 
   container.innerHTML = pageAccounts.map(acc => {
     const quotaHtml = renderQuota(acc);
+    const weight = formatAccountWeight(acc.account_weight);
 
     return `
     <div class="account-row ${acc.status === 'disabled' ? 'account-row-disabled' : ''}">
@@ -270,7 +271,10 @@ function renderAccounts() {
         >
       </label>
       <div class="account-info">
-        <div class="account-email">${esc(acc.email)}</div>
+        <div class="account-title-row">
+          <div class="account-email">${esc(acc.email)}</div>
+          <span class="info-pill weight-pill">权重 ${esc(weight)}</span>
+        </div>
         <div class="account-meta">
           <span class="status status-${acc.status}">${statusText(acc.status)}</span>
           <span>${esc(acc.license_id || '')}</span>
@@ -334,6 +338,20 @@ function getCurrentPageAccounts() {
   return allAccounts.slice(start, start + PAGE_SIZE);
 }
 
+function sortAccountsByWeight(accounts) {
+  return [...accounts].sort((left, right) => {
+    const leftWeight = normalizeAccountWeight(left.account_weight);
+    const rightWeight = normalizeAccountWeight(right.account_weight);
+    if (rightWeight !== leftWeight) return rightWeight - leftWeight;
+    return String(left.email || '').localeCompare(String(right.email || ''));
+  });
+}
+
+function normalizeAccountWeight(weight) {
+  const numericWeight = Number(weight);
+  return Number.isFinite(numericWeight) ? numericWeight : -Infinity;
+}
+
 function toggleAccountSelection(id, checked) {
   if (checked) selectedAccountIds.add(id);
   else selectedAccountIds.delete(id);
@@ -364,6 +382,12 @@ function statusText(status) {
     disabled: '已停用',
   };
   return map[status] || status;
+}
+
+function formatAccountWeight(weight) {
+  return typeof weight === 'number' && isFinite(weight)
+    ? weight.toFixed(4)
+    : '--';
 }
 
 async function loadQuota(id, silent = false) {
@@ -505,9 +529,6 @@ function renderQuota(acc) {
   const quotaNums = usedFraction > 0.9
     ? `<span style="color:red">${usedStr} / ${maxStr}</span>`
     : `${usedStr} / ${maxStr}`;
-  const weight = typeof acc.account_weight === 'number' && isFinite(acc.account_weight)
-    ? acc.account_weight.toFixed(4)
-    : '--';
 
   let timeHtml = '';
   const isManual = acc.quota_date_mode === 'manual';
@@ -515,14 +536,20 @@ function renderQuota(acc) {
   const certExpiry = isManual ? acc.manual_cert_expires_on : formatDateTime(acc.quota_reset_at);
 
   if (nextRefresh || certExpiry) {
-    const modePart = isManual ? '<span>手动</span>' : '<span>自动</span>';
+    const modePart = isManual ? '手动' : '自动';
     const nextPart = `下次刷新 ${renderRefreshDate(nextRefresh)}`;
-    const expiryPart = certExpiry ? `证书过期 <span style="color:#000">${esc(certExpiry)}</span>` : '证书过期 未知';
-    timeHtml = `<div class="account-meta" style="margin-top:2px;color:#000;">${modePart}&ensp;|&ensp;${nextPart}&ensp;|&ensp;${expiryPart}</div>`;
+    const expiryPart = certExpiry ? `证书过期 ${esc(certExpiry)}` : '证书过期 未知';
+    timeHtml = `
+      <div class="date-pills">
+        <span class="info-pill">${modePart}</span>
+        <span class="info-pill">${nextPart}</span>
+        <span class="info-pill">${expiryPart}</span>
+      </div>
+    `;
   }
 
   return `
-    <div class="account-meta" style="margin-top: 4px; color:#000;">已用 ${quotaNums}&ensp;|&ensp;权重 ${esc(weight)}</div>
+    <div class="quota-line">已用 ${quotaNums}</div>
     <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
     ${timeHtml}
   `;
