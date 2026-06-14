@@ -507,7 +507,7 @@ function getNextManualRefreshDate(dayOfMonth) {
 }
 
 function renderRefreshDate(value) {
-  if (!value) return '鏈煡';
+  if (!value) return '未知';
   const [year, month, day] = value.split('-').map(Number);
   const refreshLocal = new Date(year, month - 1, day);
   const todayLocal = new Date();
@@ -790,18 +790,18 @@ async function saveDateSettings(btn) {
     body.manual_cert_expires_on = document.getElementById('manual-cert-expires-on').value;
   }
 
-  await withLoading(btn, '淇濆瓨涓?..', async () => {
+  await withLoading(btn, '保存中...', async () => {
     const res = await fetch(`/api/accounts/${id}/date-settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '淇濆瓨澶辫触');
+    if (!res.ok) throw new Error(data.error || '保存失败');
     hideDateSettingsForm();
     await loadAccounts();
   }).catch(err => {
-    alert(`淇濆瓨澶辫触: ${err.message}`);
+    alert(`保存失败: ${err.message}`);
   });
 }
 
