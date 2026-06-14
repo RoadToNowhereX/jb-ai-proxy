@@ -172,12 +172,46 @@ function getRemainingQuotaPercent(account) {
 
 /**
  * Returns a positive weight (0..1) for use in Smooth WRR.
+ * Combines quota score and time score (dual-dimension SWRR):
+ *   weight = quotaScore × (1 - α) + timeScore × α
+ *
+ * timeScore is inversely proportional to time until quota reset:
+ *   accounts closer to reset get higher timeScore → higher priority.
+ *
+ * Parameters read from config:
+ *   polling.time_weight   (α)            default 0.3
+ *   polling.horizon_days  (horizon)      default 30
+ *
  * Accounts with unknown or invalid quota data return null (excluded from scheduling).
  */
 function getAccountWeight(account) {
-  const pct = getRemainingQuotaPercent(account);
-  if (pct === null) return null;
-  return pct; // weight = remaining fraction
+  // ── Quota score (preserves original logic) ──────────────────────────────
+  const quotaScore = getRemainingQuotaPercent(account);
+  if (quotaScore === null) return null; // invalid quota → exclude
+
+  // ── Read configurable parameters ────────────────────────────────────────
+  const cfg = loadConfig();
+  const timeWeight = typeof cfg.polling?.time_weight === 'number'
+    ? Math.max(0, Math.min(1, cfg.polling.time_weight))
+    : 0.3;
+  const horizonMs = typeof cfg.polling?.horizon_days === 'number' && cfg.polling.horizon_days > 0
+    ? cfg.polling.horizon_days * 86400000
+    : 30 * 86400000;
+
+  // ── Time score (inverted: closer to reset → higher score) ───────────────
+  let timeScore = 0.5; // neutral default when quota_reset_at is unknown
+  const resetAt = account.quota_reset_at;
+  if (typeof resetAt === 'number' && isFinite(resetAt)) {
+    const msUntilReset = resetAt - Date.now();
+    if (msUntilReset <= 0) {
+      timeScore = 1; // reset has arrived (or is overdue) → highest priority
+    } else {
+      timeScore = Math.max(0, 1 - msUntilReset / horizonMs);
+    }
+  }
+
+  // ── Combined weight ──────────────────────────────────────────────────────
+  return quotaScore * (1 - timeWeight) + timeScore * timeWeight;
 }
 
 function getNext() {

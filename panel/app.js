@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadRefreshPolicy();
   await loadQuotaSettings();
+  await loadPollingSettings();
   await loadAgentPool();
   await loadAccounts();
 });
@@ -135,6 +136,62 @@ async function saveQuotaSettings(e) {
       body: JSON.stringify({
         quota_refresh_interval: interval,
         quota_min_remaining_percent: threshold,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存设置失败');
+    msg.textContent = '设置已保存';
+  }).catch(err => {
+    msg.textContent = `保存设置失败: ${esc(err.message)}`;
+  });
+}
+
+async function loadPollingSettings() {
+  const msg = document.getElementById('polling-save-msg');
+  if (msg) msg.textContent = '加载设置中...';
+
+  try {
+    const res = await fetch('/api/settings/polling');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载设置失败');
+
+    const tw = data.time_weight ?? 0.3;
+    const elSlider = document.getElementById('polling-time-weight-slider');
+    const elNumber = document.getElementById('polling-time-weight');
+    if (elSlider) elSlider.value = tw;
+    if (elNumber) elNumber.value = parseFloat(tw).toFixed(2);
+
+    const elHorizon = document.getElementById('polling-horizon-days');
+    if (elHorizon) elHorizon.value = data.horizon_days ?? 30;
+
+    if (msg) msg.textContent = '当前设置已加载';
+  } catch (err) {
+    if (msg) msg.textContent = `加载设置失败: ${esc(err.message)}`;
+  }
+}
+
+async function savePollingSettings(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  const msg = document.getElementById('polling-save-msg');
+
+  await withLoading(btn, '保存中...', async () => {
+    const timeWeight = parseFloat(document.getElementById('polling-time-weight').value);
+    const horizonDays = parseFloat(document.getElementById('polling-horizon-days').value);
+
+    if (isNaN(timeWeight) || timeWeight < 0 || timeWeight > 1) {
+      throw new Error('时间权重 α 必须为 0 到 1 之间的数值');
+    }
+    if (isNaN(horizonDays) || horizonDays <= 0) {
+      throw new Error('Horizon 必须为正数（天）');
+    }
+
+    const res = await fetch('/api/settings/polling', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        time_weight: timeWeight,
+        horizon_days: horizonDays,
       }),
     });
     const data = await res.json();

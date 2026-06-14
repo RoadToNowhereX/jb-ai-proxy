@@ -79,6 +79,40 @@ router.post('/api/settings/quota', (req, res) => {
   });
 });
 
+router.get('/api/settings/polling', (req, res) => {
+  const cfg = loadConfig();
+  res.json({
+    time_weight: cfg.polling?.time_weight ?? 0.3,
+    horizon_days: cfg.polling?.horizon_days ?? 30,
+  });
+});
+
+router.post('/api/settings/polling', (req, res) => {
+  const { time_weight, horizon_days } = req.body;
+
+  if (typeof time_weight !== 'number' || time_weight < 0 || time_weight > 1) {
+    return res.status(400).json({ error: 'time_weight must be a number between 0 and 1' });
+  }
+  if (typeof horizon_days !== 'number' || horizon_days <= 0) {
+    return res.status(400).json({ error: 'horizon_days must be a positive number' });
+  }
+
+  const config = loadConfig();
+  const next = saveConfig({
+    ...config,
+    polling: {
+      ...config.polling,
+      time_weight,
+      horizon_days,
+    },
+  });
+
+  res.json({
+    time_weight: next.polling.time_weight,
+    horizon_days: next.polling.horizon_days,
+  });
+});
+
 router.post('/api/accounts/manual', async (req, res) => {
   const { refresh_token, license_id } = req.body;
   if (!refresh_token) {

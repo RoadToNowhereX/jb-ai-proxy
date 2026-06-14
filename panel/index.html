@@ -76,6 +76,30 @@
       </form>
     </section>
 
+    <section class="card">
+      <h2>轮询权重设置</h2>
+      <p class="muted">配置双维加权轮询（SWRR）参数。优先消耗即将刷新的账号，保护刷新日期遥远的账号。</p>
+      <form id="polling-settings-form" onsubmit="savePollingSettings(event)">
+        <div class="form-group">
+          <label>时间权重 α（0 = 纯额度模式，1 = 纯时间模式，推荐 0.3）</label>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <input type="range" id="polling-time-weight-slider" min="0" max="1" step="0.05" style="flex:1;"
+              oninput="document.getElementById('polling-time-weight').value=parseFloat(this.value).toFixed(2)">
+            <input type="number" id="polling-time-weight" min="0" max="1" step="0.05" required style="width:80px;"
+              oninput="document.getElementById('polling-time-weight-slider').value=this.value">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>时间评分标准化基准 Horizon（天，距刷新超过此值则时间优先级最低，推荐 30）</label>
+          <input type="number" id="polling-horizon-days" min="1" max="365" step="1" required>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">保存设置</button>
+        </div>
+        <p id="polling-save-msg" class="muted"></p>
+      </form>
+    </section>
+
     <div id="oauth-form" class="modal hidden" onclick="if(event.target===this) hideOAuthForm()">
       <div class="modal-content">
         <h3>第一步：<a id="oauth-url" class="step-link" href="#" target="_blank">点击这里前往 JetBrains 登录</a></h3>
