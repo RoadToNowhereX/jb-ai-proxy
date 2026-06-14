@@ -6,34 +6,120 @@ let accounts = [];
 let refreshTimer = null;
 let quotaRefreshTimer = null;
 
-function init() {
-  accounts = loadCredentials().map(account => ({
+function normalizeAccount(account) {
+  const normalized = {
     ...account,
     status: account.status || 'active',
-  }));
+  };
+
+  if (normalized.quota_date_mode !== 'manual') {
+    normalized.quota_date_mode = 'auto';
+    normalized.manual_quota_refresh_day = null;
+    normalized.manual_cert_expires_on = null;
+    return normalized;
+  }
+
+  normalized.manual_quota_refresh_day = normalizeRefreshDay(normalized.manual_quota_refresh_day);
+  normalized.manual_cert_expires_on = isValidDateOnly(normalized.manual_cert_expires_on)
+    ? normalized.manual_cert_expires_on
+    : null;
+
+  if (!normalized.manual_quota_refresh_day || !normalized.manual_cert_expires_on) {
+    normalized.quota_date_mode = 'auto';
+    normalized.manual_quota_refresh_day = null;
+    normalized.manual_cert_expires_on = null;
+  }
+
+  return normalized;
+}
+
+function getQuotaDateMode(account) {
+  return account.quota_date_mode === 'manual' ? 'manual' : 'auto';
+}
+
+function normalizeRefreshDay(value) {
+  const day = Number(value);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
+  return day;
+}
+
+function isValidDateOnly(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(year, month - 1, day);
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
+}
+
+function getNextMonthlyDateMs(dayOfMonth, fromMs = Date.now()) {
+  const day = normalizeRefreshDay(dayOfMonth);
+  if (!day) return null;
+
+  const now = new Date(fromMs);
+  if (Number.isNaN(now.getTime())) return null;
+
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  const buildDate = (targetYear, targetMonth) => {
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    return new Date(targetYear, targetMonth, Math.min(day, lastDay));
+  };
+
+  let next = buildDate(year, month);
+  const today = new Date(year, month, now.getDate());
+  if (next <= today) {
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+    next = buildDate(year, month);
+  }
+
+  return next.getTime();
+}
+
+function getEffectiveQuotaResetAt(account) {
+  if (getQuotaDateMode(account) === 'manual') {
+    return getNextMonthlyDateMs(account.manual_quota_refresh_day);
+  }
+
+  const resetAt = account.quota_reset_at;
+  if (typeof resetAt === 'number' && isFinite(resetAt) && resetAt > 0) return resetAt;
+  return null;
+}
+
+function init() {
+  accounts = loadCredentials().map(normalizeAccount);
   startRefreshLoop();
   startQuotaRefreshLoop();
   console.log(`Account manager: loaded ${accounts.length} account(s)`);
 }
 
 function getAll() {
-  return accounts.map(account => ({
-    id: account.id,
-    email: account.email,
-    status: account.status,
-    license_id: account.license_id,
-    added_at: account.added_at,
-    last_used_at: account.last_used_at,
-    last_error_type: account.last_error_type || null,
-    last_error_at: account.last_error_at || null,
-    last_error_message: account.last_error_message || null,
-    last_recovery_attempt_at: account.last_recovery_attempt_at || null,
-    quota_used: account.quota_used,
-    quota_max: account.quota_max,
-    quota_updated_at: account.quota_updated_at,
-    quota_reset_at: account.quota_reset_at,
-    grazie_agent: account.grazie_agent,
-  }));
+  return accounts.map(account => {
+    const effectiveQuotaResetAt = getEffectiveQuotaResetAt(account);
+    return {
+      id: account.id,
+      email: account.email,
+      status: account.status,
+      license_id: account.license_id,
+      added_at: account.added_at,
+      last_used_at: account.last_used_at,
+      last_error_type: account.last_error_type || null,
+      last_error_at: account.last_error_at || null,
+      last_error_message: account.last_error_message || null,
+      last_recovery_attempt_at: account.last_recovery_attempt_at || null,
+      quota_used: account.quota_used,
+      quota_max: account.quota_max,
+      quota_updated_at: account.quota_updated_at,
+      quota_reset_at: effectiveQuotaResetAt || account.quota_reset_at,
+      quota_date_mode: getQuotaDateMode(account),
+      manual_quota_refresh_day: Number.isInteger(account.manual_quota_refresh_day) ? account.manual_quota_refresh_day : null,
+      manual_cert_expires_on: account.manual_cert_expires_on || null,
+      account_weight: getAccountWeight(account),
+      grazie_agent: account.grazie_agent,
+    };
+  });
 }
 
 async function addFromOAuth(tokens, licenseId) {
@@ -324,6 +410,34 @@ function updateGrazieAgent(id, agentName) {
   return account;
 }
 
+function updateDateSettings(id, settings = {}) {
+  const account = getAccountById(id);
+  const mode = settings.quota_date_mode === 'manual' ? 'manual' : 'auto';
+
+  if (mode === 'auto') {
+    account.quota_date_mode = 'auto';
+    account.manual_quota_refresh_day = null;
+    account.manual_cert_expires_on = null;
+    persist();
+    return account;
+  }
+
+  const manualQuotaRefreshDay = normalizeRefreshDay(settings.manual_quota_refresh_day);
+  if (!manualQuotaRefreshDay) {
+    throw new Error('manual_quota_refresh_day must be an integer between 1 and 31');
+  }
+  if (!isValidDateOnly(settings.manual_cert_expires_on)) {
+    throw new Error('manual_cert_expires_on must be a valid YYYY-MM-DD date');
+  }
+
+  account.quota_date_mode = 'manual';
+  account.manual_quota_refresh_day = manualQuotaRefreshDay;
+  account.manual_cert_expires_on = settings.manual_cert_expires_on;
+  account.quota_reset_at = getNextMonthlyDateMs(manualQuotaRefreshDay);
+  persist();
+  return account;
+}
+
 async function forceRefresh(id) {
   const account = getAccountById(id);
 
@@ -365,7 +479,9 @@ async function getQuotaForAccount(id) {
 
   // Persist quota reset time from JetBrains response (millisecond timestamp)
   const until = quotaData.current?.until;
-  if (typeof until === 'number' && isFinite(until) && until > 0) {
+  if (getQuotaDateMode(account) === 'manual') {
+    account.quota_reset_at = getNextMonthlyDateMs(account.manual_quota_refresh_day);
+  } else if (typeof until === 'number' && isFinite(until) && until > 0) {
     account.quota_reset_at = until;
   }
 
@@ -494,9 +610,11 @@ module.exports = {
   bulkDisable,
   updateLicenseId,
   updateGrazieAgent,
+  updateDateSettings,
   getNext,
   ensureValidJwt,
   forceRefresh,
   getQuotaForAccount,
   markStatus,
+  getNextMonthlyDateMs,
 };

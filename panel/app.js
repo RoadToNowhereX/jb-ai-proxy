@@ -281,7 +281,6 @@ function renderAccounts() {
         <div id="quota-${acc.id}">${quotaHtml}</div>
       </div>
       <div class="account-actions">
-        <button class="btn-sm" onclick="showAgentForm('${acc.id}', '${acc.email}', '${acc.grazie_agent || ''}')">选择标识</button>
         <button class="btn-sm" onclick="withLoading(this, '查询中...', () => loadQuota('${acc.id}'))">查额度</button>
         ${acc.status === 'disabled'
           ? `<button class="btn-sm btn-success" onclick="enableAccount(this, '${acc.id}')">启用</button>`
@@ -290,6 +289,9 @@ function renderAccounts() {
             <button class="btn-warning" onclick="disableAccount(this, '${acc.id}')">停用</button>
           `}
         <button class="btn-danger" onclick="deleteAccount(this, '${acc.id}')">删除</button>
+        <div style="flex-basis:100%; height:0;"></div>
+        <button class="btn-sm" onclick="showDateSettingsForm('${acc.id}')">日期设置</button>
+        <button class="btn-sm" onclick="showAgentForm('${acc.id}', '${acc.email}', '${acc.grazie_agent || ''}')">选择标识</button>
       </div>
     </div>
   `}).join('');
@@ -381,8 +383,9 @@ async function loadQuota(id, silent = false) {
     if (acc) {
       acc.quota_used = used;
       acc.quota_max = max;
+      if (typeof data.account_weight === 'number') acc.account_weight = data.account_weight;
       // Sync quota_reset_at from JetBrains current.until
-      const until = parseQuotaResetAt(data);
+      const until = typeof data.quota_reset_at === 'number' ? data.quota_reset_at : parseQuotaResetAt(data);
       if (until !== null) acc.quota_reset_at = until;
       if (el) el.innerHTML = renderQuota(acc);
     } else if (el) {
@@ -454,6 +457,42 @@ function guessNextRefreshDate(resetAtMs) {
  * Same line: "下次刷新 YYYY-MM-DD  证书过期 YYYY-MM-DD HH:mm"
  * Returns an HTML string. Safe to call when quota data is missing.
  */
+function getNextManualRefreshDate(dayOfMonth) {
+  const day = Number(dayOfMonth);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
+
+  const pad = n => String(n).padStart(2, '0');
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  const build = (targetYear, targetMonth) => {
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const actualDay = Math.min(day, lastDay);
+    return { actualDay };
+  };
+
+  let next = build(year, month);
+  const today = new Date(year, month, now.getDate());
+  if (new Date(year, month, next.actualDay) <= today) {
+    month += 1;
+    if (month > 11) { month = 0; year += 1; }
+    next = build(year, month);
+  }
+
+  return `${year}-${pad(month + 1)}-${pad(next.actualDay)}`;
+}
+
+function renderRefreshDate(value) {
+  if (!value) return '鏈煡';
+  const [year, month, day] = value.split('-').map(Number);
+  const refreshLocal = new Date(year, month - 1, day);
+  const todayLocal = new Date();
+  todayLocal.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((refreshLocal - todayLocal) / 86400000);
+  const dateColor = diffDays <= 7 ? 'color:red' : 'color:#000';
+  return `<span style="${dateColor}">${esc(value)}</span>`;
+}
+
 function renderQuota(acc) {
   if (acc.quota_max === undefined || acc.quota_used === undefined) return '';
 
@@ -466,32 +505,24 @@ function renderQuota(acc) {
   const quotaNums = usedFraction > 0.9
     ? `<span style="color:red">${usedStr} / ${maxStr}</span>`
     : `${usedStr} / ${maxStr}`;
+  const weight = typeof acc.account_weight === 'number' && isFinite(acc.account_weight)
+    ? acc.account_weight.toFixed(4)
+    : '--';
 
   let timeHtml = '';
-  if (acc.quota_reset_at !== undefined) {
-    const nextRefresh = guessNextRefreshDate(acc.quota_reset_at);
-    const certExpiry  = formatDateTime(acc.quota_reset_at);
+  const isManual = acc.quota_date_mode === 'manual';
+  const nextRefresh = isManual ? getNextManualRefreshDate(acc.manual_quota_refresh_day) : guessNextRefreshDate(acc.quota_reset_at);
+  const certExpiry = isManual ? acc.manual_cert_expires_on : formatDateTime(acc.quota_reset_at);
 
-    // Next refresh date: red when within 7 days (parse as local midnight to avoid UTC shift)
-    let nextDateHtml = '未知';
-    if (nextRefresh) {
-      const [ry, rm, rd] = nextRefresh.split('-').map(Number);
-      const refreshLocal = new Date(ry, rm - 1, rd); // local midnight
-      const todayLocal   = new Date();
-      todayLocal.setHours(0, 0, 0, 0);
-      const diffDays = Math.round((refreshLocal - todayLocal) / 86400000);
-      const dateColor = diffDays <= 7 ? 'color:red' : 'color:#000';
-      nextDateHtml = `<span style="${dateColor}">${esc(nextRefresh)}</span>`;
-    }
-
-    const nextPart   = `下次刷新 ${nextDateHtml}`;
+  if (nextRefresh || certExpiry) {
+    const modePart = isManual ? '<span>手动</span>' : '<span>自动</span>';
+    const nextPart = `下次刷新 ${renderRefreshDate(nextRefresh)}`;
     const expiryPart = certExpiry ? `证书过期 <span style="color:#000">${esc(certExpiry)}</span>` : '证书过期 未知';
-
-    timeHtml = `<div class="account-meta" style="margin-top:2px;color:#000;">${nextPart}&ensp;|&ensp;${expiryPart}</div>`;
+    timeHtml = `<div class="account-meta" style="margin-top:2px;color:#000;">${modePart}&ensp;|&ensp;${nextPart}&ensp;|&ensp;${expiryPart}</div>`;
   }
 
   return `
-    <div class="account-meta" style="margin-top: 4px; color:#000;">已用 ${quotaNums}</div>
+    <div class="account-meta" style="margin-top: 4px; color:#000;">已用 ${quotaNums}&ensp;|&ensp;权重 ${esc(weight)}</div>
     <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
     ${timeHtml}
   `;
@@ -698,6 +729,52 @@ async function saveAgent(btn) {
     await loadAccounts();
   }).catch(err => {
     alert(`保存失败: ${err.message}`);
+  });
+}
+
+function showDateSettingsForm(id) {
+  const acc = allAccounts.find(a => a.id === id);
+  if (!acc) return;
+
+  document.getElementById('date-settings-account-id').value = id;
+  document.getElementById('date-settings-account-email').textContent = acc.email;
+  document.getElementById('date-settings-mode').value = acc.quota_date_mode || 'auto';
+  document.getElementById('manual-quota-refresh-day').value = acc.manual_quota_refresh_day || '';
+  document.getElementById('manual-cert-expires-on').value = acc.manual_cert_expires_on || '';
+  toggleDateSettingsManualFields();
+  document.getElementById('date-settings-modal').classList.remove('hidden');
+}
+
+function hideDateSettingsForm() {
+  document.getElementById('date-settings-modal').classList.add('hidden');
+}
+
+function toggleDateSettingsManualFields() {
+  const mode = document.getElementById('date-settings-mode').value;
+  document.getElementById('date-settings-manual-fields').style.display = mode === 'manual' ? '' : 'none';
+}
+
+async function saveDateSettings(btn) {
+  const id = document.getElementById('date-settings-account-id').value;
+  const mode = document.getElementById('date-settings-mode').value;
+  const body = { quota_date_mode: mode };
+  if (mode === 'manual') {
+    body.manual_quota_refresh_day = Number(document.getElementById('manual-quota-refresh-day').value);
+    body.manual_cert_expires_on = document.getElementById('manual-cert-expires-on').value;
+  }
+
+  await withLoading(btn, '淇濆瓨涓?..', async () => {
+    const res = await fetch(`/api/accounts/${id}/date-settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '淇濆瓨澶辫触');
+    hideDateSettingsForm();
+    await loadAccounts();
+  }).catch(err => {
+    alert(`淇濆瓨澶辫触: ${err.message}`);
   });
 }
 

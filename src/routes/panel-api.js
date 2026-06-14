@@ -191,6 +191,23 @@ router.post('/api/accounts/:id/grazie-agent', (req, res) => {
   }
 });
 
+router.post('/api/accounts/:id/date-settings', (req, res) => {
+  try {
+    const account = accountManager.updateDateSettings(req.params.id, req.body || {});
+    res.json({
+      id: account.id,
+      email: account.email,
+      status: account.status,
+      quota_date_mode: account.quota_date_mode,
+      manual_quota_refresh_day: account.manual_quota_refresh_day || null,
+      manual_cert_expires_on: account.manual_cert_expires_on || null,
+    });
+  } catch (err) {
+    const status = err.message === 'Account not found' ? 404 : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
 router.post('/api/accounts/:id/refresh', async (req, res) => {
   try {
     await accountManager.forceRefresh(req.params.id);
@@ -203,7 +220,14 @@ router.post('/api/accounts/:id/refresh', async (req, res) => {
 router.get('/api/accounts/:id/quota', async (req, res) => {
   try {
     const quota = await accountManager.getQuotaForAccount(req.params.id);
-    res.json(quota);
+    const accounts = accountManager.getAll();
+    const acc = accounts.find(a => a.id === req.params.id);
+    const result = { ...quota };
+    if (acc) {
+      result.account_weight = acc.account_weight;
+      result.quota_reset_at = acc.quota_reset_at;
+    }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
