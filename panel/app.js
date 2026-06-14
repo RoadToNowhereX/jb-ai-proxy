@@ -199,14 +199,7 @@ function renderAccounts() {
   renderBulkActions(pageAccounts);
 
   container.innerHTML = pageAccounts.map(acc => {
-    let quotaHtml = '';
-    if (acc.quota_max !== undefined && acc.quota_used !== undefined) {
-      const pct = Math.max(0, Math.min(100, ((acc.quota_max - acc.quota_used) / acc.quota_max) * 100));
-      quotaHtml = `
-        <div class="account-meta" style="margin-top: 4px;">已用 ${acc.quota_used.toFixed(0)} / ${acc.quota_max.toFixed(0)}</div>
-        <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
-      `;
-    }
+    const quotaHtml = renderQuota(acc);
 
     return `
     <div class="account-row ${acc.status === 'disabled' ? 'account-row-disabled' : ''}">
@@ -325,16 +318,19 @@ async function loadQuota(id, silent = false) {
 
     const used = parseFloat(data.current?.tariffQuota?.current?.amount || data.current?.current?.amount || 0);
     const max = parseFloat(data.current?.tariffQuota?.maximum?.amount || data.current?.maximum?.amount || 1000000);
-    const pct = Math.max(0, Math.min(100, ((max - used) / max) * 100));
 
     // Update local cache
     const acc = allAccounts.find(a => a.id === id);
     if (acc) {
       acc.quota_used = used;
       acc.quota_max = max;
-    }
-
-    if (el) {
+      // Sync quota_reset_at from JetBrains current.until
+      const until = parseQuotaResetAt(data);
+      if (until !== null) acc.quota_reset_at = until;
+      if (el) el.innerHTML = renderQuota(acc);
+    } else if (el) {
+      // Fallback: render without cache object
+      const pct = Math.max(0, Math.min(100, ((max - used) / max) * 100));
       el.innerHTML = `
         <div class="account-meta" style="margin-top: 4px;">已用 ${used.toFixed(0)} / ${max.toFixed(0)}</div>
         <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
@@ -344,6 +340,104 @@ async function loadQuota(id, silent = false) {
     if (el && !silent) el.innerHTML = `<span class="muted">${esc(err.message)}</span>`;
     if (!silent) throw err;
   }
+}
+
+/**
+ * Extract quota reset timestamp (ms) from a JetBrains quota API response.
+ * Returns a positive integer or null.
+ */
+function parseQuotaResetAt(quotaData) {
+  const until = quotaData?.current?.until;
+  if (typeof until === 'number' && isFinite(until) && until > 0) return until;
+  return null;
+}
+
+/**
+ * Format a millisecond timestamp to a locale datetime string (to the minute).
+ */
+function formatDateTime(ms) {
+  if (typeof ms !== 'number' || !isFinite(ms) || ms <= 0) return null;
+  const d = new Date(ms);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Infer the next monthly quota refresh date from the certificate expiry timestamp.
+ * The refresh day-of-month equals the expiry day-of-month.
+ * If today < that day  → refresh is this month on that day.
+ * If today >= that day → refresh is next month on that day.
+ * Clamps to the last day of the target month when needed (e.g. day 31 in April).
+ * Returns a "YYYY-MM-DD" string, or null when the input is invalid.
+ */
+function guessNextRefreshDate(resetAtMs) {
+  if (typeof resetAtMs !== 'number' || !isFinite(resetAtMs) || resetAtMs <= 0) return null;
+
+  const pad = n => String(n).padStart(2, '0');
+  const expiryDay = new Date(resetAtMs).getDate(); // the recurring monthly day
+
+  const now = new Date();
+  let year  = now.getFullYear();
+  let month = now.getMonth(); // 0-indexed
+
+  if (now.getDate() >= expiryDay) {
+    // Already at or past the refresh day this month → push to next month
+    month += 1;
+    if (month > 11) { month = 0; year += 1; }
+  }
+  // Clamp to the last day of the target month
+  const lastDay   = new Date(year, month + 1, 0).getDate();
+  const actualDay = Math.min(expiryDay, lastDay);
+
+  return `${year}-${pad(month + 1)}-${pad(actualDay)}`;
+}
+
+/**
+ * Render the quota bar + time info row for a given account object.
+ * Same line: "下次刷新 YYYY-MM-DD  证书过期 YYYY-MM-DD HH:mm"
+ * Returns an HTML string. Safe to call when quota data is missing.
+ */
+function renderQuota(acc) {
+  if (acc.quota_max === undefined || acc.quota_used === undefined) return '';
+
+  const pct = Math.max(0, Math.min(100, ((acc.quota_max - acc.quota_used) / acc.quota_max) * 100));
+
+  // Quota numbers: red when > 90% used
+  const usedFraction = acc.quota_max > 0 ? acc.quota_used / acc.quota_max : 0;
+  const usedStr = acc.quota_used.toFixed(0);
+  const maxStr  = acc.quota_max.toFixed(0);
+  const quotaNums = usedFraction > 0.9
+    ? `<span style="color:red">${usedStr} / ${maxStr}</span>`
+    : `${usedStr} / ${maxStr}`;
+
+  let timeHtml = '';
+  if (acc.quota_reset_at !== undefined) {
+    const nextRefresh = guessNextRefreshDate(acc.quota_reset_at);
+    const certExpiry  = formatDateTime(acc.quota_reset_at);
+
+    // Next refresh date: red when within 7 days (parse as local midnight to avoid UTC shift)
+    let nextDateHtml = '未知';
+    if (nextRefresh) {
+      const [ry, rm, rd] = nextRefresh.split('-').map(Number);
+      const refreshLocal = new Date(ry, rm - 1, rd); // local midnight
+      const todayLocal   = new Date();
+      todayLocal.setHours(0, 0, 0, 0);
+      const diffDays = Math.round((refreshLocal - todayLocal) / 86400000);
+      const dateColor = diffDays <= 7 ? 'color:red' : 'color:#000';
+      nextDateHtml = `<span style="${dateColor}">${esc(nextRefresh)}</span>`;
+    }
+
+    const nextPart   = `下次刷新 ${nextDateHtml}`;
+    const expiryPart = certExpiry ? `证书过期 <span style="color:#000">${esc(certExpiry)}</span>` : '证书过期 未知';
+
+    timeHtml = `<div class="account-meta" style="margin-top:2px;color:#000;">${nextPart}&ensp;|&ensp;${expiryPart}</div>`;
+  }
+
+  return `
+    <div class="account-meta" style="margin-top: 4px; color:#000;">已用 ${quotaNums}</div>
+    <div class="quota-bar"><div class="quota-fill" style="width:${pct}%"></div></div>
+    ${timeHtml}
+  `;
 }
 
 async function checkAllQuotas(btn) {

@@ -31,6 +31,7 @@ function getAll() {
     quota_used: account.quota_used,
     quota_max: account.quota_max,
     quota_updated_at: account.quota_updated_at,
+    quota_reset_at: account.quota_reset_at,
     grazie_agent: account.grazie_agent,
   }));
 }
@@ -327,6 +328,13 @@ async function getQuotaForAccount(id) {
   account.quota_used = used;
   account.quota_max = max;
   account.quota_updated_at = Date.now();
+
+  // Persist quota reset time from JetBrains response (millisecond timestamp)
+  const until = quotaData.current?.until;
+  if (typeof until === 'number' && isFinite(until) && until > 0) {
+    account.quota_reset_at = until;
+  }
+
   persist();
   
   return quotaData;
