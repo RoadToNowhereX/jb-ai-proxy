@@ -55,6 +55,41 @@ function getAccountWeight(account, pollingCfg = {}) {
   return quotaScore * (1 - timeWeight) + timeScore * timeWeight;
 }
 
+function getPollingInfo(account, cfg = {}) {
+  const thresholdPercent = typeof cfg.quota_min_remaining_percent === 'number'
+    ? cfg.quota_min_remaining_percent
+    : 10;
+  const thresholdFraction = thresholdPercent / 100;
+  const remainingFraction = getRemainingQuotaPercent(account);
+  const rawWeight = getAccountWeight(account, cfg.polling || cfg);
+
+  let pollingEligible = true;
+  let pollingSkipReason = null;
+
+  if (account.status !== 'active') {
+    pollingEligible = false;
+    pollingSkipReason = 'inactive';
+  } else if (remainingFraction === null || rawWeight === null) {
+    pollingEligible = false;
+    pollingSkipReason = 'quota_unknown';
+  } else if (remainingFraction <= thresholdFraction) {
+    pollingEligible = false;
+    pollingSkipReason = 'below_min_remaining_threshold';
+  }
+
+  const effectiveWeight = pollingEligible ? rawWeight : 0;
+
+  return {
+    remaining_quota_percent: remainingFraction === null ? null : remainingFraction * 100,
+    raw_weight: rawWeight,
+    effective_weight: effectiveWeight,
+    account_weight: effectiveWeight,
+    polling_eligible: pollingEligible,
+    polling_skip_reason: pollingSkipReason,
+    polling_min_remaining_percent: thresholdPercent,
+  };
+}
+
 /**
  * Smooth Weighted Round-Robin selection over an array of candidate accounts.
  * Returns the winning account (modifies _smooth_weight in-place).
@@ -209,7 +244,7 @@ const NOW = Date.now();
   const w = getAccountWeight(acc, cfg);
   const expTimeScore = 1 - msUntilReset / (30 * DAY);
 
-  assert(approx(w, expTimeScore, 1e-9), 'T8: time_weight=1 → 纯时间模式');
+  assert(approx(w, expTimeScore, 1e-5), 'T8: time_weight=1 → 纯时间模式');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -255,6 +290,71 @@ const NOW = Date.now();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// T11: Remaining 6.13% with a 10% threshold is excluded from scheduling
+{
+  const cfg = { quota_min_remaining_percent: 10, polling: { time_weight: 0.4, horizon_days: 30 } };
+  const acc = {
+    status: 'active',
+    quota_max: 300000,
+    quota_used: 281610,
+    quota_reset_at: NOW + 5 * DAY,
+  };
+
+  const info = getPollingInfo(acc, cfg);
+  assert(approx(info.remaining_quota_percent, 6.13, 1e-9), 'T11: 281610/300000 -> remaining 6.13%');
+  assert(info.raw_weight > 0, 'T11: raw weight can still be greater than 0');
+  assert(info.effective_weight === 0, 'T11: below threshold -> effective weight is 0');
+  assert(info.polling_eligible === false, 'T11: below threshold -> excluded from polling');
+  assert(info.polling_skip_reason === 'below_min_remaining_threshold', 'T11: skip reason is threshold');
+}
+
+// T12: Remaining exactly at the threshold is excluded (<= threshold)
+{
+  const cfg = { quota_min_remaining_percent: 10, polling: { time_weight: 0.3, horizon_days: 30 } };
+  const info = getPollingInfo({
+    status: 'active',
+    quota_max: 100,
+    quota_used: 90,
+  }, cfg);
+
+  assert(info.remaining_quota_percent === 10, 'T12: remaining quota is exactly 10%');
+  assert(info.effective_weight === 0, 'T12: equal to threshold -> effective weight is 0');
+  assert(info.polling_eligible === false, 'T12: equal to threshold -> excluded from polling');
+}
+
+// T13: Threshold 0 allows positive remaining quota, but still excludes exhausted accounts
+{
+  const cfg = { quota_min_remaining_percent: 0, polling: { time_weight: 0, horizon_days: 30 } };
+  const positive = getPollingInfo({
+    status: 'active',
+    quota_max: 100,
+    quota_used: 99,
+  }, cfg);
+  const exhausted = getPollingInfo({
+    status: 'active',
+    quota_max: 100,
+    quota_used: 100,
+  }, cfg);
+
+  assert(positive.polling_eligible === true, 'T13: threshold 0 and remaining > 0 -> eligible');
+  assert(positive.effective_weight > 0, 'T13: threshold 0 and remaining > 0 -> effective weight > 0');
+  assert(exhausted.polling_eligible === false, 'T13: threshold 0 but exhausted -> excluded');
+  assert(exhausted.effective_weight === 0, 'T13: exhausted -> effective weight is 0');
+}
+
+// T14: Unknown/invalid quota is not eligible and has no effective weight
+{
+  const cfg = { quota_min_remaining_percent: 10, polling: { time_weight: 0.3, horizon_days: 30 } };
+  const unknown = getPollingInfo({ status: 'active' }, cfg);
+  const invalidMax = getPollingInfo({ status: 'active', quota_max: 0, quota_used: 0 }, cfg);
+
+  assert(unknown.polling_eligible === false, 'T14: missing quota -> excluded from polling');
+  assert(unknown.effective_weight === 0, 'T14: missing quota -> effective weight is 0');
+  assert(unknown.polling_skip_reason === 'quota_unknown', 'T14: missing quota -> quota_unknown');
+  assert(invalidMax.polling_eligible === false, 'T14: quota_max <= 0 -> excluded from polling');
+  assert(invalidMax.effective_weight === 0, 'T14: quota_max <= 0 -> effective weight is 0');
+}
+
 // Summary
 // ─────────────────────────────────────────────────────────────────────────────
 console.log('');

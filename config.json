@@ -35,8 +35,9 @@
     ]
   },
   "quota_refresh_interval": 60,
+  "quota_min_remaining_percent": 10,
   "polling": {
-    "time_weight": 0.3,
+    "time_weight": 0.4,
     "horizon_days": 30
   }
 }

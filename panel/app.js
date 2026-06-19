@@ -257,7 +257,8 @@ function renderAccounts() {
 
   container.innerHTML = pageAccounts.map(acc => {
     const quotaHtml = renderQuota(acc);
-    const weight = formatAccountWeight(acc.account_weight);
+    const weight = formatAccountWeight(getEffectiveAccountWeight(acc));
+    const pollingSkipLabel = getPollingSkipLabel(acc);
 
     return `
     <div class="account-row ${acc.status === 'disabled' ? 'account-row-disabled' : ''}">
@@ -274,6 +275,7 @@ function renderAccounts() {
         <div class="account-title-row">
           <div class="account-email">${esc(acc.email)}</div>
           <span class="info-pill weight-pill">权重 ${esc(weight)}</span>
+          ${pollingSkipLabel ? `<span class="info-pill polling-skip-pill">${esc(pollingSkipLabel)}</span>` : ''}
         </div>
         <div class="account-meta">
           <span class="status status-${acc.status}">${statusText(acc.status)}</span>
@@ -340,16 +342,35 @@ function getCurrentPageAccounts() {
 
 function sortAccountsByWeight(accounts) {
   return [...accounts].sort((left, right) => {
-    const leftWeight = normalizeAccountWeight(left.account_weight);
-    const rightWeight = normalizeAccountWeight(right.account_weight);
+    const leftWeight = normalizeAccountWeight(getEffectiveAccountWeight(left));
+    const rightWeight = normalizeAccountWeight(getEffectiveAccountWeight(right));
     if (rightWeight !== leftWeight) return rightWeight - leftWeight;
     return String(left.email || '').localeCompare(String(right.email || ''));
   });
 }
 
+function getEffectiveAccountWeight(account) {
+  if (typeof account.effective_weight === 'number') return account.effective_weight;
+  return account.account_weight;
+}
+
 function normalizeAccountWeight(weight) {
   const numericWeight = Number(weight);
   return Number.isFinite(numericWeight) ? numericWeight : -Infinity;
+}
+
+function getPollingSkipLabel(account) {
+  if (account.polling_eligible !== false) return '';
+
+  const threshold = Number(account.polling_min_remaining_percent);
+  const thresholdText = Number.isFinite(threshold) ? `${threshold}%` : '当前';
+  const reasonMap = {
+    inactive: '不参与轮询：账号非正常',
+    quota_unknown: '不参与轮询：额度未知',
+    below_min_remaining_threshold: `不参与轮询：低于 ${thresholdText} 阈值`,
+  };
+
+  return reasonMap[account.polling_skip_reason] || '不参与轮询';
 }
 
 function toggleAccountSelection(id, checked) {
@@ -408,6 +429,12 @@ async function loadQuota(id, silent = false) {
       acc.quota_used = used;
       acc.quota_max = max;
       if (typeof data.account_weight === 'number') acc.account_weight = data.account_weight;
+      if (typeof data.raw_weight === 'number') acc.raw_weight = data.raw_weight;
+      if (typeof data.effective_weight === 'number') acc.effective_weight = data.effective_weight;
+      acc.remaining_quota_percent = data.remaining_quota_percent ?? acc.remaining_quota_percent;
+      acc.polling_eligible = data.polling_eligible ?? acc.polling_eligible;
+      acc.polling_skip_reason = data.polling_skip_reason ?? acc.polling_skip_reason;
+      acc.polling_min_remaining_percent = data.polling_min_remaining_percent ?? acc.polling_min_remaining_percent;
       // Sync quota_reset_at from JetBrains current.until
       const until = typeof data.quota_reset_at === 'number' ? data.quota_reset_at : parseQuotaResetAt(data);
       if (until !== null) acc.quota_reset_at = until;
@@ -591,6 +618,19 @@ async function refreshAccount(id) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || '刷新失败');
   await loadAccounts();
+}
+
+async function refreshAllAccounts(btn) {
+  await withLoading(btn, '刷新中...', async () => {
+    const res = await fetch('/api/accounts/bulk-refresh', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '刷新失败');
+
+    await loadAccounts();
+    alert(`刷新完成：成功 ${data.success || 0}，失败 ${data.failed || 0}`);
+  }).catch(err => {
+    alert(`刷新失败: ${err.message}`);
+  });
 }
 
 async function disableAccount(btn, id) {

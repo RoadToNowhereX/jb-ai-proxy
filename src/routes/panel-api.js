@@ -140,6 +140,15 @@ router.post('/api/accounts/bulk-disable', (req, res) => {
   }
 });
 
+router.post('/api/accounts/bulk-refresh', async (req, res) => {
+  try {
+    const result = await accountManager.bulkRefresh();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/api/accounts/:id/disable', (req, res) => {
   try {
     const account = accountManager.disable(req.params.id);
@@ -225,6 +234,12 @@ router.get('/api/accounts/:id/quota', async (req, res) => {
     const result = { ...quota };
     if (acc) {
       result.account_weight = acc.account_weight;
+      result.raw_weight = acc.raw_weight;
+      result.effective_weight = acc.effective_weight;
+      result.remaining_quota_percent = acc.remaining_quota_percent;
+      result.polling_eligible = acc.polling_eligible;
+      result.polling_skip_reason = acc.polling_skip_reason;
+      result.polling_min_remaining_percent = acc.polling_min_remaining_percent;
       result.quota_reset_at = acc.quota_reset_at;
     }
     res.json(result);

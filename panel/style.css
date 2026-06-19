@@ -321,6 +321,12 @@ code {
   color: #075985;
 }
 
+.polling-skip-pill {
+  flex: 0 0 auto;
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .quota-line {
   margin-top: 4px;
   color: #000;

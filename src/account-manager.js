@@ -116,7 +116,7 @@ function getAll() {
       quota_date_mode: getQuotaDateMode(account),
       manual_quota_refresh_day: Number.isInteger(account.manual_quota_refresh_day) ? account.manual_quota_refresh_day : null,
       manual_cert_expires_on: account.manual_cert_expires_on || null,
-      account_weight: getAccountWeight(account),
+      ...getPollingInfo(account),
       grazie_agent: account.grazie_agent,
     };
   });
@@ -257,26 +257,16 @@ function getRemainingQuotaPercent(account) {
 }
 
 /**
- * Returns a positive weight (0..1) for use in Smooth WRR.
- * Combines quota score and time score (dual-dimension SWRR):
- *   weight = quotaScore × (1 - α) + timeScore × α
+ * Returns a positive weight (0..1) for Smooth WRR.
+ *   weight = quotaScore * (1 - alpha) + timeScore * alpha
  *
- * timeScore is inversely proportional to time until quota reset:
- *   accounts closer to reset get higher timeScore → higher priority.
- *
- * Parameters read from config:
- *   polling.time_weight   (α)            default 0.3
- *   polling.horizon_days  (horizon)      default 30
- *
- * Accounts with unknown or invalid quota data return null (excluded from scheduling).
+ * Accounts closer to quota reset get a higher timeScore.
+ * Accounts with unknown or invalid quota data return null.
  */
-function getAccountWeight(account) {
-  // ── Quota score (preserves original logic) ──────────────────────────────
+function getAccountWeight(account, cfg = loadConfig()) {
   const quotaScore = getRemainingQuotaPercent(account);
-  if (quotaScore === null) return null; // invalid quota → exclude
+  if (quotaScore === null) return null;
 
-  // ── Read configurable parameters ────────────────────────────────────────
-  const cfg = loadConfig();
   const timeWeight = typeof cfg.polling?.time_weight === 'number'
     ? Math.max(0, Math.min(1, cfg.polling.time_weight))
     : 0.3;
@@ -284,45 +274,66 @@ function getAccountWeight(account) {
     ? cfg.polling.horizon_days * 86400000
     : 30 * 86400000;
 
-  // ── Time score (inverted: closer to reset → higher score) ───────────────
   let timeScore = 0.5; // neutral default when quota_reset_at is unknown
   const resetAt = account.quota_reset_at;
   if (typeof resetAt === 'number' && isFinite(resetAt)) {
     const msUntilReset = resetAt - Date.now();
     if (msUntilReset <= 0) {
-      timeScore = 1; // reset has arrived (or is overdue) → highest priority
+      timeScore = 1;
     } else {
       timeScore = Math.max(0, 1 - msUntilReset / horizonMs);
     }
   }
 
-  // ── Combined weight ──────────────────────────────────────────────────────
   return quotaScore * (1 - timeWeight) + timeScore * timeWeight;
+}
+
+function getPollingInfo(account, cfg = loadConfig()) {
+  const thresholdPercent = cfg.quota_min_remaining_percent ?? 10;
+  const thresholdFraction = thresholdPercent / 100;
+  const remainingFraction = getRemainingQuotaPercent(account);
+  const rawWeight = getAccountWeight(account, cfg);
+
+  let pollingEligible = true;
+  let pollingSkipReason = null;
+
+  if (account.status !== 'active') {
+    pollingEligible = false;
+    pollingSkipReason = 'inactive';
+  } else if (remainingFraction === null || rawWeight === null) {
+    pollingEligible = false;
+    pollingSkipReason = 'quota_unknown';
+  } else if (remainingFraction <= thresholdFraction) {
+    pollingEligible = false;
+    pollingSkipReason = 'below_min_remaining_threshold';
+  }
+
+  const effectiveWeight = pollingEligible ? rawWeight : 0;
+
+  return {
+    remaining_quota_percent: remainingFraction === null ? null : remainingFraction * 100,
+    raw_weight: rawWeight,
+    effective_weight: effectiveWeight,
+    account_weight: effectiveWeight,
+    polling_eligible: pollingEligible,
+    polling_skip_reason: pollingSkipReason,
+    polling_min_remaining_percent: thresholdPercent,
+  };
 }
 
 function getNext() {
   const cfg = loadConfig();
-  // threshold is a percentage value 0-100; convert to fraction
-  const thresholdFraction = (cfg.quota_min_remaining_percent ?? 10) / 100;
+  // Reuse the same eligibility calculation exposed to the panel.
+  const eligibleAccounts = accounts.filter(account => getPollingInfo(account, cfg).polling_eligible);
 
-  // Only active accounts participate
-  const active = accounts.filter(account => account.status === 'active');
-  if (active.length === 0) return null;
-
-  // Separate candidates: accounts with valid quota above threshold
-  const candidates = active.filter(account => {
-    const pct = getRemainingQuotaPercent(account);
-    if (pct === null) return false; // unknown quota → excluded
-    return pct > thresholdFraction;  // <= threshold → skip
-  });
-
+  const candidates = eligibleAccounts;
   if (candidates.length === 0) return null;
 
   // Smooth Weighted Round-Robin
   // Each account accumulates its weight each round; the highest wins and
   // has the total weight subtracted, distributing load proportionally.
   for (const acc of candidates) {
-    const w = getAccountWeight(acc);
+    const w = getPollingInfo(acc, cfg).effective_weight;
     acc._smooth_weight = (acc._smooth_weight || 0) + w;
   }
 
@@ -333,7 +344,7 @@ function getNext() {
   }
 
   // Subtract total weight from the winner
-  const totalWeight = candidates.reduce((sum, acc) => sum + getAccountWeight(acc), 0);
+  const totalWeight = candidates.reduce((sum, acc) => sum + getPollingInfo(acc, cfg).effective_weight, 0);
   best._smooth_weight -= totalWeight;
 
   best.last_used_at = Date.now();
@@ -440,20 +451,66 @@ function updateDateSettings(id, settings = {}) {
 
 async function forceRefresh(id) {
   const account = getAccountById(id);
+  const originalStatus = account.status;
 
-  if (account.status === 'error') {
-    account.id_token_expires_at = 0;
-    account.jwt_expires_at = 0;
+  console.log(`Manual refresh started for ${account.email} (${account.id}), status=${originalStatus}`);
+
+  try {
+    if (account.status === 'error') {
+      account.id_token_expires_at = 0;
+      account.jwt_expires_at = 0;
+    }
+
+    await ensureValidJwt(account, { preserveDisabled: account.status === 'disabled' });
+
+    if (account.status !== 'error' && account.status !== 'disabled') {
+      account.status = 'active';
+    }
+
+    persist();
+    console.log(`Manual refresh succeeded for ${account.email} (${account.id}), status=${account.status}`);
+    return account;
+  } catch (err) {
+    console.error(`Manual refresh failed for ${account.email} (${account.id}): ${err.message}`);
+    throw err;
+  }
+}
+
+async function bulkRefresh() {
+  const targetAccounts = accounts.filter(account => account.status !== 'disabled');
+  const results = [];
+
+  console.log(`Bulk account refresh started: ${targetAccounts.length} account(s)`);
+
+  for (const account of targetAccounts) {
+    try {
+      await forceRefresh(account.id);
+      results.push({
+        id: account.id,
+        email: account.email,
+        ok: true,
+      });
+    } catch (err) {
+      results.push({
+        id: account.id,
+        email: account.email,
+        ok: false,
+        error: err.message,
+      });
+    }
   }
 
-  await ensureValidJwt(account, { preserveDisabled: account.status === 'disabled' });
+  const success = results.filter(result => result.ok).length;
+  const failed = results.length - success;
 
-  if (account.status !== 'error' && account.status !== 'disabled') {
-    account.status = 'active';
-  }
+  console.log(`Bulk account refresh finished: success=${success}, failed=${failed}, total=${targetAccounts.length}`);
 
-  persist();
-  return account;
+  return {
+    total: targetAccounts.length,
+    success,
+    failed,
+    results,
+  };
 }
 
 async function enable(id) {
@@ -608,6 +665,7 @@ module.exports = {
   disable,
   enable,
   bulkDisable,
+  bulkRefresh,
   updateLicenseId,
   updateGrazieAgent,
   updateDateSettings,
