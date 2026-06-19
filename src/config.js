@@ -58,8 +58,14 @@ function loadConfig() {
   try {
     return mergeConfig(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')));
   } catch {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
-    return { ...DEFAULT_CONFIG };
+    const EXAMPLE_CONFIG_PATH = path.join(__dirname, '..', 'config.example.json');
+    if (fs.existsSync(EXAMPLE_CONFIG_PATH)) {
+      fs.copyFileSync(EXAMPLE_CONFIG_PATH, CONFIG_PATH);
+      return mergeConfig(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')));
+    } else {
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2));
+      return { ...DEFAULT_CONFIG };
+    }
   }
 }
 
