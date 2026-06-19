@@ -541,7 +541,18 @@ function renderRefreshDate(value) {
   todayLocal.setHours(0, 0, 0, 0);
   const diffDays = Math.round((refreshLocal - todayLocal) / 86400000);
   const dateColor = diffDays <= 7 ? 'color:red' : 'color:#000';
-  return `<span style="${dateColor}">${esc(value)}</span>`;
+
+  const refreshTime = new Date(Date.UTC(year, month - 1, day, 13, 0, 0));
+  const pad = n => String(n).padStart(2, '0');
+  const localYear = refreshTime.getFullYear();
+  const localMonth = pad(refreshTime.getMonth() + 1);
+  const localDay = pad(refreshTime.getDate());
+  const localHour = pad(refreshTime.getHours());
+  const localMinute = pad(refreshTime.getMinutes());
+
+  const displayValue = `${localYear}-${localMonth}-${localDay} ${localHour}:${localMinute}`;
+
+  return `<span style="${dateColor}">${esc(displayValue)}</span>`;
 }
 
 function renderQuota(acc) {
@@ -564,7 +575,7 @@ function renderQuota(acc) {
 
   if (nextRefresh || certExpiry) {
     const modePart = isManual ? '手动' : '自动';
-    const nextPart = `下次刷新 ${renderRefreshDate(nextRefresh)}`;
+    const nextPart = `下次刷新&nbsp;${renderRefreshDate(nextRefresh)}`;
     const expiryPart = certExpiry ? `证书过期 ${esc(certExpiry)}` : '证书过期 未知';
     timeHtml = `
       <div class="date-pills">
