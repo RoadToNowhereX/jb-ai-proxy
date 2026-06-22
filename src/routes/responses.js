@@ -8,6 +8,7 @@ const router = express.Router();
 
 router.post('/v1/responses', async (req, res) => {
   try {
+    console.log(`[request] POST /v1/responses model=${req.body.model}`);
     const account = accountManager.getNext();
     if (!account) {
       return res.status(503).json({ error: { message: 'No active accounts', type: 'server_error' } });

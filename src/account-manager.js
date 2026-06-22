@@ -524,6 +524,7 @@ async function enable(id) {
 
 async function getQuotaForAccount(id) {
   const account = getAccountById(id);
+  console.log(`[quota] fetching quota for ${account.email} (${account.id})`);
   const jwt = await ensureValidJwt(account, { preserveDisabled: account.status === 'disabled' });
   const quotaData = await jb.getQuota(jwt);
   
@@ -543,9 +544,12 @@ async function getQuotaForAccount(id) {
   }
 
   persist();
-  
+
+  const resetStr = account.quota_reset_at ? new Date(account.quota_reset_at).toISOString() : 'unknown';
+  console.log(`[quota] ${account.email} — used=${used} max=${max} reset_at=${resetStr}`);
   return quotaData;
 }
+
 
 function startRefreshLoop() {
   if (refreshTimer) clearInterval(refreshTimer);

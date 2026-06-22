@@ -81,8 +81,14 @@ async function fetchWithRetry(url, options = {}) {
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
+      const t0 = Date.now();
+      console.log(`[upstream] → ${method} ${url} (attempt ${attempt}/${maxRetries + 1})`);
       const res = await fetch(url, options);
-      if (res.ok) return res;
+      const elapsed = Date.now() - t0;
+      if (res.ok) {
+        console.log(`[upstream] ← ${method} ${url} status=${res.status} (${elapsed}ms)`);
+        return res;
+      }
 
       const responseText = await res.text();
       const classification = classifyStatus(res.status);
@@ -100,6 +106,7 @@ async function fetchWithRetry(url, options = {}) {
         }
       );
 
+      console.warn(`[upstream] ← ${method} ${url} status=${res.status} FAILED (${elapsed}ms)`);
       if (!classification.retryable || attempt > maxRetries) throw err;
       console.warn(`[jb-client] retrying request after HTTP error: ${formatRequestError(err)}`);
     } catch (err) {
@@ -127,6 +134,7 @@ async function fetchWithRetry(url, options = {}) {
     await sleep(retryDelayMs * attempt);
   }
 }
+
 
 async function refreshIdToken(refreshToken) {
   const res = await fetchWithRetry(`${JB_OAUTH_BASE}/oauth2/token`, {

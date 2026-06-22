@@ -11,6 +11,7 @@ const router = express.Router();
 
 router.post('/v1/messages', async (req, res) => {
   try {
+    console.log(`[request] POST /v1/messages model=${req.body.model} stream=${req.body.stream !== false}`);
     const account = accountManager.getNext();
     if (!account) {
       return res.status(503).json({
