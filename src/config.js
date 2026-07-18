@@ -8,6 +8,11 @@ const DEFAULT_CONFIG = {
   port: 3000,
   api_key: '',
   panel_password: '',
+  anti_track: {
+    messages: true,
+    chat_completions: true,
+    responses: false,
+  },
   grazie_agent: {
     name: 'aia:idea',
     version: '261.22158.366:261.22158.277',
@@ -36,6 +41,10 @@ function mergeConfig(input = {}) {
   return {
     ...DEFAULT_CONFIG,
     ...input,
+    anti_track: {
+      ...DEFAULT_CONFIG.anti_track,
+      ...(input.anti_track || {}),
+    },
     grazie_agent: {
       ...DEFAULT_CONFIG.grazie_agent,
       ...(input.grazie_agent || {}),

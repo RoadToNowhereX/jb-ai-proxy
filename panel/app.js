@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadRefreshPolicy();
   await loadQuotaSettings();
+  await loadAntiTrackSettings();
   await loadPollingSettings();
   await loadAgentPool();
   await loadAccounts();
@@ -136,6 +137,47 @@ async function saveQuotaSettings(e) {
       body: JSON.stringify({
         quota_refresh_interval: interval,
         quota_min_remaining_percent: threshold,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '保存设置失败');
+    msg.textContent = '设置已保存';
+  }).catch(err => {
+    msg.textContent = `保存设置失败: ${esc(err.message)}`;
+  });
+}
+
+async function loadAntiTrackSettings() {
+  const msg = document.getElementById('anti-track-save-msg');
+  if (msg) msg.textContent = '加载设置中...';
+
+  try {
+    const res = await fetch('/api/settings/anti-track');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载设置失败');
+
+    document.getElementById('anti-track-messages').checked = data.messages;
+    document.getElementById('anti-track-chat-completions').checked = data.chat_completions;
+    document.getElementById('anti-track-responses').checked = data.responses;
+    if (msg) msg.textContent = '当前设置已加载';
+  } catch (err) {
+    if (msg) msg.textContent = `加载设置失败: ${esc(err.message)}`;
+  }
+}
+
+async function saveAntiTrack(e) {
+  e.preventDefault();
+  const btn = e.target.querySelector('button[type=submit]');
+  const msg = document.getElementById('anti-track-save-msg');
+
+  await withLoading(btn, '保存中...', async () => {
+    const res = await fetch('/api/settings/anti-track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: document.getElementById('anti-track-messages').checked,
+        chat_completions: document.getElementById('anti-track-chat-completions').checked,
+        responses: document.getElementById('anti-track-responses').checked,
       }),
     });
     const data = await res.json();

@@ -77,6 +77,33 @@
     </section>
 
     <section class="card">
+      <h2>Claude Code 追踪屏蔽</h2>
+      <p class="muted">对请求中由 Claude Code 注入的日期追踪标记进行模糊处理，防止请求来源被上游识别。</p>
+      <form id="anti-track-form" onsubmit="saveAntiTrack(event)">
+        <div class="form-group">
+          <div class="checkbox-list" style="grid-template-columns:1fr;">
+            <label class="checkbox-row">
+              <input type="checkbox" id="anti-track-messages">
+              <span><code>POST /v1/messages</code> — Anthropic 端点（默认开启）</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="anti-track-chat-completions">
+              <span><code>POST /v1/chat/completions</code> — OpenAI 端点（默认开启）</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="anti-track-responses">
+              <span><code>POST /v1/responses</code> — Responses API（默认关闭）</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">保存设置</button>
+        </div>
+        <p id="anti-track-save-msg" class="muted"></p>
+      </form>
+    </section>
+
+    <section class="card">
       <h2>轮询权重设置</h2>
       <p class="muted">配置双维加权轮询（SWRR）参数。优先消耗即将刷新的账号，保护刷新日期遥远的账号。</p>
       <form id="polling-settings-form" onsubmit="savePollingSettings(event)">

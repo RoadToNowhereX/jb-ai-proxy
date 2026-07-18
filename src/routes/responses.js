@@ -30,6 +30,7 @@ router.post('/v1/responses', async (req, res) => {
       nativeCall,
       account, jwt, nativeId: mapping.nativeId,
       errorShape: 'openai',
+      endpoint: 'responses',
     });
   } catch (err) {
     console.error('POST /v1/responses error:', err.message);

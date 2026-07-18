@@ -17,6 +17,26 @@ router.get('/api/settings/grazie-agents', (req, res) => {
   res.json(loadConfig().grazie_agents || []);
 });
 
+router.get('/api/settings/anti-track', (req, res) => {
+  const cfg = loadConfig().anti_track || {};
+  res.json({
+    messages: cfg.messages !== false,
+    chat_completions: cfg.chat_completions !== false,
+    responses: cfg.responses === true,
+  });
+});
+
+router.post('/api/settings/anti-track', (req, res) => {
+  const { messages, chat_completions, responses } = req.body;
+  if (typeof messages !== 'boolean' || typeof chat_completions !== 'boolean' || typeof responses !== 'boolean') {
+    return res.status(400).json({ error: 'messages, chat_completions, responses must all be boolean' });
+  }
+
+  const config = loadConfig();
+  const next = saveConfig({ ...config, anti_track: { messages, chat_completions, responses } });
+  res.json(next.anti_track);
+});
+
 router.post('/api/settings/refresh-policy', (req, res) => {
   const config = loadConfig();
   const current = config.refresh_policy || {};

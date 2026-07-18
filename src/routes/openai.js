@@ -6,6 +6,7 @@ const modelId = require('../model-id');
 const accountManager = require('../account-manager');
 const jb = require('../jb-client');
 const { pipeNativeProxy } = require('./_native-proxy');
+const { applyAntiTrack } = require('../anti-track');
 
 const router = express.Router();
 
@@ -56,12 +57,14 @@ router.post('/v1/chat/completions', async (req, res) => {
         nativeCall: jb.nativeOpenaiChatCompletions,
         account, jwt, nativeId: mapping.nativeId,
         errorShape: 'openai',
+        endpoint: 'chat_completions',
       });
     }
 
     // Aggregated fallback for cross-provider requests and for codex/embedding
     // profiles that the native endpoint doesn't accept.
-    const jbBody = convertRequest(req.body);
+    const cleanBody = applyAntiTrack(req.body, 'chat_completions');
+    const jbBody = convertRequest(cleanBody);
     const call = endpointFor(req.body.model) === 'responses' ? jb.responsesStream : jb.chatStream;
     const jbRes = await call(jwt, jbBody, account);
 

@@ -6,6 +6,7 @@ const modelId = require('../model-id');
 const accountManager = require('../account-manager');
 const jb = require('../jb-client');
 const { pipeNativeProxy } = require('./_native-proxy');
+const { applyAntiTrack } = require('../anti-track');
 
 const router = express.Router();
 
@@ -31,12 +32,14 @@ router.post('/v1/messages', async (req, res) => {
         nativeCall: jb.nativeAnthropicMessages,
         account, jwt, nativeId: mapping.nativeId,
         errorShape: 'anthropic',
+        endpoint: 'messages',
       });
     }
 
     // Aggregated fallback for cross-provider requests (e.g. Anthropic client
     // calling GPT or Gemini through /v1/messages).
-    const jbBody = convertRequest(req.body);
+    const cleanBody = applyAntiTrack(req.body, 'messages');
+    const jbBody = convertRequest(cleanBody);
     const call = endpointFor(req.body.model) === 'responses' ? jb.responsesStream : jb.chatStream;
     const jbRes = await call(jwt, jbBody, account);
 

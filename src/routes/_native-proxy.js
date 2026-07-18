@@ -1,4 +1,5 @@
 const accountManager = require('../account-manager');
+const { applyAntiTrack } = require('../anti-track');
 
 /**
  * Shared pipeline for the native passthrough routes
@@ -19,8 +20,8 @@ const accountManager = require('../account-manager');
  */
 
 async function pipeNativeProxy(req, res, opts) {
-  const { nativeCall, account, jwt, nativeId, errorShape } = opts;
-  const body = { ...req.body, model: nativeId };
+  const { nativeCall, account, jwt, nativeId, errorShape, endpoint } = opts;
+  const body = applyAntiTrack({ ...req.body, model: nativeId }, endpoint);
 
   const ctrl = new AbortController();
   const onClose = () => ctrl.abort();
