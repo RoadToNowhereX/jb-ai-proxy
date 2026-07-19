@@ -23,6 +23,8 @@ const ANTHROPIC_PROFILE_TO_NATIVE = {
   'anthropic-claude-4-6-sonnet': 'claude-sonnet-4-6',
   'anthropic-claude-4-7-opus': 'claude-opus-4-7',
   'anthropic-claude-4-8-opus': 'claude-opus-4-8',
+  'anthropic-claude-fable-5': 'claude-fable-5',
+  'anthropic-claude-sonnet-5': 'claude-sonnet-5',
 };
 
 // JB profile ID → native OpenAI model ID (chat.completions-compatible).
@@ -49,6 +51,9 @@ const OPENAI_PROFILE_TO_NATIVE = {
   'openai-gpt-5-4-mini': 'gpt-5.4-mini',
   'openai-gpt-5-4-nano': 'gpt-5.4-nano',
   'openai-gpt-5-5': 'gpt-5.5',
+  'openai-gpt-5-6-luna': 'gpt-5.6-luna',
+  'openai-gpt-5-6-terra': 'gpt-5.6-terra',
+  'openai-gpt-5-6-sol': 'gpt-5.6-sol',
 };
 
 // Codex variants — only reachable via /openai/v1/responses, rejected by
