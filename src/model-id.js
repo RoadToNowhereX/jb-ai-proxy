@@ -25,6 +25,7 @@ const ANTHROPIC_PROFILE_TO_NATIVE = {
   'anthropic-claude-4-8-opus': 'claude-opus-4-8',
   'anthropic-claude-fable-5': 'claude-fable-5',
   'anthropic-claude-sonnet-5': 'claude-sonnet-5',
+  'anthropic-claude-opus-5': 'claude-opus-5',
 };
 
 // JB profile ID → native OpenAI model ID (chat.completions-compatible).
@@ -75,6 +76,8 @@ const XAI_PROFILE_TO_NATIVE = {
   'xai-grok-4-1-fast': 'grok-4-1-fast-reasoning',
   'xai-grok-4-1-fast-non-reasoning': 'grok-4-1-fast-non-reasoning',
   'xai-grok-code-fast-1': 'grok-code-fast-1-0825',
+  'xai-grok-4-3': 'grok-4.3',
+  'xai-grok-4-5': 'grok-4.5',
 };
 
 /**
