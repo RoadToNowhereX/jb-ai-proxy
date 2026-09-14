@@ -55,6 +55,7 @@ const OPENAI_PROFILE_TO_NATIVE = {
   'openai-gpt-5-6-luna': 'gpt-5.6-luna',
   'openai-gpt-5-6-terra': 'gpt-5.6-terra',
   'openai-gpt-5-6-sol': 'gpt-5.6-sol',
+  'openai-gpt-6-astra': 'gpt-6-astra',
 };
 
 // Codex variants — only reachable via /openai/v1/responses, rejected by
@@ -78,6 +79,7 @@ const XAI_PROFILE_TO_NATIVE = {
   'xai-grok-code-fast-1': 'grok-code-fast-1-0825',
   'xai-grok-4-3': 'grok-4.3',
   'xai-grok-4-5': 'grok-4.5',
+  'xai-grok-4-6': 'grok-4.6',
 };
 
 /**
