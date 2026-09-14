@@ -59,7 +59,7 @@
 
     <section class="card">
       <h2>后台任务设置</h2>
-      <p class="muted">配置自动刷新账号额度的后台任务。</p>
+      <p class="muted">配置后台定时刷新与每次请求后自动查询账号额度。</p>
       <form id="quota-settings-form" onsubmit="saveQuotaSettings(event)">
         <div class="form-group">
           <label>自动刷新所有未停用账号额度的间隔时间（分钟，0 为禁用）</label>
@@ -68,6 +68,16 @@
         <div class="form-group">
           <label>轮询最低剩余额度阈值（%，剩余百分比 ≤ 此值的账号不参与轮询，0 为不限制）</label>
           <input type="number" id="quota-min-remaining-percent" min="0" max="100" required>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-row">
+            <input type="checkbox" id="quota-query-after-request">
+            <span>每次请求完成后自动查询该请求所用账号的额度</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>请求后额度查询最小间隔（秒，0 为每次都查询）</label>
+          <input type="number" id="quota-query-after-request-min-interval" min="0" required>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">保存设置</button>

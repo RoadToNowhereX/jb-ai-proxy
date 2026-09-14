@@ -31,6 +31,8 @@ const DEFAULT_CONFIG = {
   },
   quota_refresh_interval: 60,
   quota_min_remaining_percent: 10,
+  quota_query_after_request: true,
+  quota_query_after_request_min_interval: 15,
   polling: {
     time_weight: 0.3,
     horizon_days: 30,
@@ -56,6 +58,8 @@ function mergeConfig(input = {}) {
     },
     quota_refresh_interval: input.quota_refresh_interval ?? DEFAULT_CONFIG.quota_refresh_interval,
     quota_min_remaining_percent: input.quota_min_remaining_percent ?? DEFAULT_CONFIG.quota_min_remaining_percent,
+    quota_query_after_request: input.quota_query_after_request ?? DEFAULT_CONFIG.quota_query_after_request,
+    quota_query_after_request_min_interval: input.quota_query_after_request_min_interval ?? DEFAULT_CONFIG.quota_query_after_request_min_interval,
     polling: {
       ...DEFAULT_CONFIG.polling,
       ...(input.polling || {}),

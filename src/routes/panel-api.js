@@ -74,16 +74,24 @@ router.get('/api/settings/quota', (req, res) => {
   res.json({
     quota_refresh_interval: cfg.quota_refresh_interval ?? 60,
     quota_min_remaining_percent: cfg.quota_min_remaining_percent ?? 10,
+    quota_query_after_request: cfg.quota_query_after_request ?? true,
+    quota_query_after_request_min_interval: cfg.quota_query_after_request_min_interval ?? 15,
   });
 });
 
 router.post('/api/settings/quota', (req, res) => {
-  const { quota_refresh_interval, quota_min_remaining_percent } = req.body;
+  const { quota_refresh_interval, quota_min_remaining_percent, quota_query_after_request, quota_query_after_request_min_interval } = req.body;
   if (!Number.isInteger(quota_refresh_interval) || quota_refresh_interval < 0) {
     return res.status(400).json({ error: 'quota_refresh_interval must be an integer >= 0 (0 means disabled)' });
   }
   if (!Number.isInteger(quota_min_remaining_percent) || quota_min_remaining_percent < 0 || quota_min_remaining_percent > 100) {
     return res.status(400).json({ error: 'quota_min_remaining_percent must be an integer between 0 and 100' });
+  }
+  if (typeof quota_query_after_request !== 'boolean') {
+    return res.status(400).json({ error: 'quota_query_after_request must be boolean' });
+  }
+  if (!Number.isInteger(quota_query_after_request_min_interval) || quota_query_after_request_min_interval < 0) {
+    return res.status(400).json({ error: 'quota_query_after_request_min_interval must be an integer >= 0 (0 means query after every request)' });
   }
 
   const config = loadConfig();
@@ -91,11 +99,15 @@ router.post('/api/settings/quota', (req, res) => {
     ...config,
     quota_refresh_interval,
     quota_min_remaining_percent,
+    quota_query_after_request,
+    quota_query_after_request_min_interval,
   });
 
   res.json({
     quota_refresh_interval: next.quota_refresh_interval,
     quota_min_remaining_percent: next.quota_min_remaining_percent,
+    quota_query_after_request: next.quota_query_after_request,
+    quota_query_after_request_min_interval: next.quota_query_after_request_min_interval,
   });
 });
 

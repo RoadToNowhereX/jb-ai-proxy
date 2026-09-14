@@ -5,6 +5,7 @@ const jb = require('./jb-client');
 let accounts = [];
 let refreshTimer = null;
 let quotaRefreshTimer = null;
+const quotaQueryInFlight = new Set();
 
 function normalizeAccount(account) {
   const normalized = {
@@ -551,6 +552,28 @@ async function getQuotaForAccount(id) {
 }
 
 
+/**
+ * Fire-and-forget quota query after a proxied request completes.
+ * Controlled by config: quota_query_after_request (master switch) and
+ * quota_query_after_request_min_interval (per-account min interval in
+ * seconds, 0 = query after every request). Never throws; safe to call
+ * without await from route handlers.
+ */
+function queryQuotaAfterRequest(account) {
+  if (!account) return;
+  const cfg = loadConfig();
+  if (!cfg.quota_query_after_request) return;
+
+  const minIntervalMs = Math.max(0, cfg.quota_query_after_request_min_interval || 0) * 1000;
+  if (minIntervalMs > 0 && Date.now() - (account.quota_updated_at || 0) < minIntervalMs) return;
+  if (quotaQueryInFlight.has(account.id)) return;
+
+  quotaQueryInFlight.add(account.id);
+  getQuotaForAccount(account.id)
+    .catch(err => console.error(`Post-request quota query failed for ${account.email}: ${err.message}`))
+    .finally(() => quotaQueryInFlight.delete(account.id));
+}
+
 function startRefreshLoop() {
   if (refreshTimer) clearInterval(refreshTimer);
 
@@ -677,6 +700,7 @@ module.exports = {
   ensureValidJwt,
   forceRefresh,
   getQuotaForAccount,
+  queryQuotaAfterRequest,
   markStatus,
   getNextMonthlyDateMs,
 };

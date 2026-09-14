@@ -112,6 +112,12 @@ async function loadQuotaSettings() {
     const elThreshold = document.getElementById('quota-min-remaining-percent');
     if (elThreshold) elThreshold.value = data.quota_min_remaining_percent ?? 10;
 
+    const elQueryAfterRequest = document.getElementById('quota-query-after-request');
+    if (elQueryAfterRequest) elQueryAfterRequest.checked = Boolean(data.quota_query_after_request);
+
+    const elQueryInterval = document.getElementById('quota-query-after-request-min-interval');
+    if (elQueryInterval) elQueryInterval.value = data.quota_query_after_request_min_interval ?? 15;
+
     if (msg) msg.textContent = '当前设置已加载';
   } catch (err) {
     if (msg) msg.textContent = `加载设置失败: ${esc(err.message)}`;
@@ -137,6 +143,8 @@ async function saveQuotaSettings(e) {
       body: JSON.stringify({
         quota_refresh_interval: interval,
         quota_min_remaining_percent: threshold,
+        quota_query_after_request: document.getElementById('quota-query-after-request').checked,
+        quota_query_after_request_min_interval: Number(document.getElementById('quota-query-after-request-min-interval').value),
       }),
     });
     const data = await res.json();

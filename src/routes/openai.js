@@ -75,11 +75,13 @@ router.post('/v1/chat/completions', async (req, res) => {
         const suspended = /license suspension|suspended/i.test(errText);
         accountManager.markStatus(account, suspended ? 'suspended' : 'quota_exhausted');
       }
+      accountManager.queryQuotaAfterRequest(account);
       return res.status(status).json({ error: { message: errText, type: 'api_error' } });
     }
 
     const isStream = req.body.stream !== false;
     await convertStreamToOpenAI(jbRes.body, res, req.body.model, isStream);
+    accountManager.queryQuotaAfterRequest(account);
   } catch (err) {
     console.error('POST /v1/chat/completions error:', err.message);
     if (!res.headersSent) {

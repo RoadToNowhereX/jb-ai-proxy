@@ -41,6 +41,8 @@
   },
   "quota_refresh_interval": 60,
   "quota_min_remaining_percent": 10,
+  "quota_query_after_request": true,
+  "quota_query_after_request_min_interval": 15,
   "polling": {
     "time_weight": 0.3,
     "horizon_days": 30

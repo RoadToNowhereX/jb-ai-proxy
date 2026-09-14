@@ -38,6 +38,7 @@ async function pipeNativeProxy(req, res, opts) {
 
   if (!jbRes.ok) {
     req.off('close', onClose);
+    accountManager.queryQuotaAfterRequest(account);
     return forwardError(res, jbRes, account, errorShape);
   }
 
@@ -62,6 +63,7 @@ async function pipeNativeProxy(req, res, opts) {
   } finally {
     req.off('close', onClose);
     if (!res.writableEnded) res.end();
+    accountManager.queryQuotaAfterRequest(account);
   }
 }
 
