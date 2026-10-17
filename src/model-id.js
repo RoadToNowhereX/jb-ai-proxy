@@ -61,7 +61,7 @@ const OPENAI_PROFILE_TO_NATIVE = {
   'openai-gpt-6-astra': 'gpt-6-astra',
   'openai-gpt-6-luna': 'gpt-6-luna',
   'openai-gpt-6-sol': 'gpt-6-sol',
-  'openai-gpt-6-1-sol': 'gpt-6-1-sol',
+  'openai-gpt-6-1-sol': 'gpt-6.1-sol',
 };
 
 // Codex variants — only reachable via /openai/v1/responses, rejected by
